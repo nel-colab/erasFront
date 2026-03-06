@@ -20,24 +20,26 @@ pipeline {
 
         stage('Deploy to Staging') {
             when {
-                branch 'develop'
+                expression { env.GIT_BRANCH == 'origin/develop' }
             }
             steps {
                 sh """
                     docker stop ${IMAGE_NAME}-staging || true
                     docker rm ${IMAGE_NAME}-staging || true
-                    docker run -d \
-                        --name ${IMAGE_NAME}-staging \
-                        --restart unless-stopped \
-                        -p 3001:80 \
+                    docker run -d \\
+                        --name ${IMAGE_NAME}-staging \\
+                        --restart unless-stopped \\
+                        -p 3001:80 \\
                         ${IMAGE_NAME}:${GIT_COMMIT}
+                    cp nginx/staging.erastcg.com /etc/nginx/sites-enabled/staging.erastcg.com
+                    nginx -t && systemctl reload nginx
                 """
             }
         }
 
         stage('Approve Production Deploy') {
             when {
-                branch 'main'
+                expression { env.GIT_BRANCH == 'origin/main' }
             }
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
@@ -48,17 +50,19 @@ pipeline {
 
         stage('Deploy to Production') {
             when {
-                branch 'main'
+                expression { env.GIT_BRANCH == 'origin/main' }
             }
             steps {
                 sh """
                     docker stop ${IMAGE_NAME}-prod || true
                     docker rm ${IMAGE_NAME}-prod || true
-                    docker run -d \
-                        --name ${IMAGE_NAME}-prod \
-                        --restart unless-stopped \
-                        -p 3000:80 \
+                    docker run -d \\
+                        --name ${IMAGE_NAME}-prod \\
+                        --restart unless-stopped \\
+                        -p 3000:80 \\
                         ${IMAGE_NAME}:${GIT_COMMIT}
+                    cp nginx/erastcg.com /etc/nginx/sites-enabled/erastcg.com
+                    nginx -t && systemctl reload nginx
                 """
             }
         }
