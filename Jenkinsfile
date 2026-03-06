@@ -31,8 +31,8 @@ pipeline {
                         --restart unless-stopped \\
                         -p 3001:80 \\
                         ${IMAGE_NAME}:${GIT_COMMIT}
-                    cp nginx/staging.erastcg.com /etc/nginx/sites-enabled/staging.erastcg.com
-                    nginx -t && systemctl reload nginx
+                    sudo cp nginx/staging.erastcg.com /etc/nginx/sites-enabled/staging.erastcg.com
+                    sudo nginx -t && sudo systemctl reload nginx
                 """
             }
         }
@@ -61,8 +61,8 @@ pipeline {
                         --restart unless-stopped \\
                         -p 3000:80 \\
                         ${IMAGE_NAME}:${GIT_COMMIT}
-                    cp nginx/erastcg.com /etc/nginx/sites-enabled/erastcg.com
-                    nginx -t && systemctl reload nginx
+                    sudo cp nginx/erastcg.com /etc/nginx/sites-enabled/erastcg.com
+                    sudo nginx -t && sudo systemctl reload nginx
                 """
             }
         }
