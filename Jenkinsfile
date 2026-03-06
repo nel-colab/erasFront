@@ -29,7 +29,7 @@ pipeline {
                     docker run -d \
                         --name ${IMAGE_NAME}-staging \
                         --restart unless-stopped \
-                        -p 3000:80 \
+                        -p 3001:80 \
                         ${IMAGE_NAME}:${GIT_COMMIT}
                 """
             }
