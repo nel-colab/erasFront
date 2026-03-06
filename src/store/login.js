@@ -2,16 +2,25 @@
 import { defineStore } from 'pinia'
 import axios from 'axios';
 
+function decodeJwt(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+  } catch { return {} }
+}
+
 export const useAuthStore = defineStore('login', {
   state: () => {
-    return { 
+    return {
       user: null,
       token: null,
       loading: false,
       error: null,
     }},
-  // could also be defined as
-  // state: () => ({ count: 0 })
+  getters: {
+    isAuthenticated: (state) => !!state.token,
+    username: (state) => (state.user && state.user.username) || '',
+    userId: (state) => (state.user && state.user.id) || null,
+  },
   actions: {
 
     async login({ username, password }) {
@@ -22,10 +31,11 @@ export const useAuthStore = defineStore('login', {
         const { data } = await axios.post('/api/auth/login', body);
 
         const token = data && (data.token || data.accessToken || data.jwt);
-        
+
         if (token) {
           this.token = token;
-          this.user = (data && data.user) || { username };
+          const payload = decodeJwt(token);
+          this.user = { id: payload.sub, username };
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
 
@@ -47,10 +57,11 @@ export const useAuthStore = defineStore('login', {
         const { data } = await axios.post('/api/auth/register', body);
 
         const token = data && (data.token || data.accessToken || data.jwt);
-        
+
         if (token) {
           this.token = token;
-          this.user = (data && data.user) || { username, email };
+          const payload = decodeJwt(token);
+          this.user = { id: payload.sub, username, email };
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
 
@@ -69,11 +80,46 @@ export const useAuthStore = defineStore('login', {
       this.error = null;
       try {
         await axios.get(`/api/auth/verify?token=${tokenvalidate}`);
-
         return true;
       } catch (e) {
         this._reset(e);
-        this.error = (e && e.response && e.response.data && e.response.data.message) || e.message || 'Registration failed';
+        this.error = (e && e.response && e.response.data && e.response.data.message) || e.message || 'Validation failed';
+        return false;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async fetchProfile() {
+      try {
+        const { data } = await axios.get('/api/users');
+        const me = data.find(u => u.id === this.user?.id);
+        if (me) this.user = { ...this.user, ...me };
+      } catch (e) {
+        // silently fail
+      }
+    },
+
+    async updateProfile({ username, email, oldPassword, newPassword }) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const body = { username, email };
+        if (oldPassword && newPassword) {
+          body.oldPassword = oldPassword;
+          body.newPassword = newPassword;
+        }
+        const { data } = await axios.put(`/api/users/update/${this.user.id}`, body);
+        const token = data && data.token;
+        if (token) {
+          this.token = token;
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          const payload = decodeJwt(token);
+          this.user = { ...this.user, id: payload.sub, username, email };
+        }
+        return true;
+      } catch (e) {
+        this.error = (e && e.response && e.response.data && e.response.data.message) || e.message || 'Update failed';
         return false;
       } finally {
         this.loading = false;
@@ -84,7 +130,7 @@ export const useAuthStore = defineStore('login', {
       this._reset();
     },
 
-    _reset(e) {
+    _reset() {
       this.user = null;
       this.token = null;
       this.loading = false;
@@ -93,4 +139,4 @@ export const useAuthStore = defineStore('login', {
       }
     }
   },
-})  
+})

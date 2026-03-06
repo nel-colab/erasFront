@@ -123,15 +123,26 @@ const doLogout = () => {
             </template>
 
             <template v-else>
-              <span class="text-light me-2">Hola, {{ username }}</span>
-
-              <button
-                @click="doLogout"
-                class="btn btn-outline-danger fs-5 px-4 py-2"
-                style="height: 50px; min-width: 130px;"
-              >
-                Log out
-              </button>
+              <div class="dropdown">
+                <button
+                  class="btn btn-outline-light fs-5 px-4 py-2 dropdown-toggle"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                  style="height: 50px;"
+                >
+                  {{ username }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <router-link class="dropdown-item" to="/profile">Go to Profile</router-link>
+                  </li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <button class="dropdown-item text-danger" @click="doLogout">Log out</button>
+                  </li>
+                </ul>
+              </div>
             </template>
           </div>
 
@@ -185,9 +196,9 @@ const doLogout = () => {
           <template v-else>
             <div v-if="isAdmin" class="d-grid gap-2 mb-3">
               <router-link to="/UpCards" class="btn btn-secondary w-100 fw-bold">UpCards</router-link>
-              <!-- ✅ unified path -->
               <router-link to="/CardsEdit" class="btn btn-secondary w-100 fw-bold">EdiCard</router-link>
             </div>
+            <router-link to="/profile" class="btn btn-outline-light w-100 fw-bold mb-2">Go to Profile</router-link>
             <button @click="doLogout" class="btn btn-outline-danger w-100 fw-bold">Log out</button>
           </template>
         </div>
