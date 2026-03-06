@@ -1,0 +1,8 @@
+services:
+  frontend:
+    build: .
+    image: eras-frontend:latest
+    container_name: eras_frontend
+    ports:
+      - "80:80"
+    restart: unless-stopped
