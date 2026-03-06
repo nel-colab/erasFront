@@ -20,7 +20,7 @@ pipeline {
 
         stage('Deploy to Staging') {
             when {
-                expression { env.GIT_BRANCH == 'origin/develop' }
+                branch 'develop'
             }
             steps {
                 sh """
@@ -39,7 +39,7 @@ pipeline {
 
         stage('Approve Production Deploy') {
             when {
-                expression { env.GIT_BRANCH == 'origin/main' }
+                branch 'main'
             }
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
@@ -50,7 +50,7 @@ pipeline {
 
         stage('Deploy to Production') {
             when {
-                expression { env.GIT_BRANCH == 'origin/main' }
+                branch 'main'
             }
             steps {
                 sh """
