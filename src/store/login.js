@@ -64,12 +64,12 @@ export const useAuthStore = defineStore('login', {
       }
     },
 
-    async validateAccount({ role, permissions }) {
+    async validateAccount({ tokenvalidate }) {
       this.loading = true;
       this.error = null;
       try {
-        const body = { role, permissions };
-        const { data } = await axios.post('/api/auth//check-access', body);
+        const body = { token: tokenvalidate };
+        const { data } = await axios.post('/api/auth/verify', body);
 
         const token = data && (data.token || data.accessToken || data.jwt);
         

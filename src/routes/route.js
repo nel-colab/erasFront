@@ -10,7 +10,7 @@ const routes = [
   { path: '/home', component: Home, alias: ['/', '/Home'], meta: { public: true } },
   { path: '/login', component: Login, alias: ['/Login'], meta: { public: true } },
   { path: '/register', component: Register, alias: ['/Register'], meta: { public: true } },
-  { path: '/validate', component: Validate, alias: ['/Validate'], meta: { public: true } },
+  { path: '/validate/:token', component: Validate, alias: ['/Validate'], meta: { public: true } },
   
 ]
 

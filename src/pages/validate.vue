@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted  } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../store/login' // <-- the Pinia store I shared
 
@@ -7,29 +7,26 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-const role = ref('')
-const permissions = ref('')
+const tokenvalidate = ref('')
 const localError = ref('')
 
+onMounted(async () => {
 
-/** Submit handler */
-const validate = async () => {
-  localError.value = ''
+  // rescatar token del path
+  tokenvalidate.value = route.params.token as string
 
-  if (!role.value || !permissions.value) {
-    localError.value = 'Please fill in both fields.'
+  if (!tokenvalidate.value) {
+    localError.value = 'Token not found'
     return
   }
 
-  // Calls POST /login/auth/login under the hood (via the store’s axios)
-  const ok = await auth.validateAccount({ role: role.value, permissions: permissions.value })
+  // llamar al servicio
+  const ok = await auth.validateAccount({ tokenvalidate: tokenvalidate.value })
 
-  if (ok) {
-    // Respect ?redirect=/some/path if present, else go to /
-    const redirect = (route.query.redirect as string) || '/'
-    router.replace(redirect)
+  if (!ok) {
+    localError.value = 'Validation failed. Please try again.'
   }
-}
+})
 
 </script>
 
@@ -45,7 +42,7 @@ const validate = async () => {
         <!-- errors -->
 
         <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">
-           <router-link to="/login" class="btn btn-primary w-100 fw-bold">Sign up</router-link>
+           <router-link to="/login" class="btn btn-primary btn-lg w-100 fw-bold"> Sign in </router-link>
         </button>
 
     </div>
