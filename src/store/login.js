@@ -64,6 +64,31 @@ export const useAuthStore = defineStore('login', {
       }
     },
 
+    async validateAccount({ role, permissions }) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const body = { role, permissions };
+        const { data } = await axios.post('/api/auth//check-access', body);
+
+        const token = data && (data.token || data.accessToken || data.jwt);
+        
+        if (token) {
+          this.token = token;
+          this.user = (data && data.user) || { username, email };
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+
+        return true;
+      } catch (e) {
+        this._reset(e);
+        this.error = (e && e.response && e.response.data && e.response.data.message) || e.message || 'Registration failed';
+        return false;
+      } finally {
+        this.loading = false;
+      }
+    },
+
     logout() {
       this._reset();
     },
