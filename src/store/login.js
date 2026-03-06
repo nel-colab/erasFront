@@ -68,16 +68,7 @@ export const useAuthStore = defineStore('login', {
       this.loading = true;
       this.error = null;
       try {
-        const body = { token: tokenvalidate };
-        const { data } = await axios.post('/api/auth/verify', body);
-
-        const token = data && (data.token || data.accessToken || data.jwt);
-        
-        if (token) {
-          this.token = token;
-          this.user = (data && data.user) || { username, email };
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        }
+        await axios.get(`/api/auth/verify?token=${tokenvalidate}`);
 
         return true;
       } catch (e) {
