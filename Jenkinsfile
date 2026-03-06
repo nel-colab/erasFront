@@ -57,7 +57,7 @@ pipeline {
                     docker run -d \
                         --name ${IMAGE_NAME}-prod \
                         --restart unless-stopped \
-                        -p 80:80 \
+                        -p 3000:80 \
                         ${IMAGE_NAME}:${GIT_COMMIT}
                 """
             }
