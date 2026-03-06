@@ -12,9 +12,27 @@ pipeline {
             }
         }
 
-        stage('Build Image') {
+        stage('Build Image (Staging)') {
+            when {
+                branch 'develop'
+            }
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${GIT_COMMIT} ."
+                sh """
+                    cp /etc/eras-frontend-staging/.env .env
+                    docker build -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                """
+            }
+        }
+
+        stage('Build Image (Production)') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh """
+                    cp /etc/eras-frontend/.env .env
+                    docker build -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                """
             }
         }
 

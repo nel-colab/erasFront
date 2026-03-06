@@ -13,7 +13,7 @@ const localError = ref('')
 onMounted(async () => {
 
   // rescatar token del path
-  tokenvalidate.value = route.params.token as string
+  tokenvalidate.value = route.query.token as string
 
   if (!tokenvalidate.value) {
     localError.value = 'Token not found'
