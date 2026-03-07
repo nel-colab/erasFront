@@ -6,6 +6,7 @@ import Login from '../pages/Login.vue'
 import Register from '../pages/Register.vue'
 import Validate from '../pages/validate.vue'
 import Profile from '../pages/Profile.vue'
+import NotFound from '../pages/NotFound.vue'
 
 const routes = [
   { path: '/home', component: Home, alias: ['/', '/Home'], meta: { public: true } },
@@ -13,6 +14,7 @@ const routes = [
   { path: '/register', component: Register, alias: ['/Register'], meta: { public: true } },
   { path: '/validate', component: Validate, alias: ['/Validate'], meta: { public: true } },
   { path: '/profile', component: Profile },
+  { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
 ]
 
 const router = createRouter({
