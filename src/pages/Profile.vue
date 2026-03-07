@@ -46,76 +46,55 @@ const save = async () => {
 </script>
 
 <template>
-  <div class="row justify-content-center mt-4">
-    <div class="col-md-6">
-      <div class="card bg-secondary bg-opacity-25 border-light shadow-lg p-4">
-        <h2 class="text-light fw-bold mb-4">Profile</h2>
+  <div class="auth-page">
+    <div class="auth-card" style="max-width: 520px;">
+      <h2>Profile</h2>
 
-        <div v-if="successMsg" class="alert alert-success">{{ successMsg }}</div>
-        <div v-if="errorMsg" class="alert alert-danger">{{ errorMsg }}</div>
+      <p v-if="successMsg" class="auth-success">{{ successMsg }}</p>
+      <p v-if="errorMsg" class="auth-error">{{ errorMsg }}</p>
 
-        <form @submit.prevent="save">
-          <div class="mb-3">
-            <label class="form-label text-light fw-semibold">Username</label>
-            <input
-              v-model="username"
-              type="text"
-              class="form-control bg-dark text-light border-light"
-            />
-          </div>
+      <form @submit.prevent="save">
+        <div class="form-group-t">
+          <label class="form-label-t">Username</label>
+          <input v-model="username" type="text" class="form-control-t" />
+        </div>
 
-          <div class="mb-3">
-            <label class="form-label text-light fw-semibold">Email</label>
-            <input
-              v-model="email"
-              type="email"
-              class="form-control bg-dark text-light border-light"
-            />
-          </div>
+        <div class="form-group-t">
+          <label class="form-label-t">Email</label>
+          <input v-model="email" type="email" class="form-control-t" />
+        </div>
 
-          <hr class="border-light my-4">
-          <h5 class="text-light mb-3">
-            Change Password
-            <small class="text-muted fs-6 fw-normal ms-2">(optional)</small>
-          </h5>
+        <hr class="t-hr">
 
-          <div class="mb-3">
-            <label class="form-label text-light fw-semibold">Current Password</label>
-            <input
-              v-model="oldPassword"
-              type="password"
-              class="form-control bg-dark text-light border-light"
-              placeholder="Required to change password"
-            />
-          </div>
+        <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 1rem;">
+          Change Password
+          <span style="font-weight: 400; color: var(--text-muted);">(optional)</span>
+        </p>
 
-          <div class="mb-3">
-            <label class="form-label text-light fw-semibold">New Password</label>
-            <input
-              v-model="newPassword"
-              type="password"
-              class="form-control bg-dark text-light border-light"
-            />
-          </div>
+        <div class="form-group-t">
+          <label class="form-label-t">Current Password</label>
+          <input
+            v-model="oldPassword"
+            type="password"
+            class="form-control-t"
+            placeholder="Required to change password"
+          />
+        </div>
 
-          <div class="mb-4">
-            <label class="form-label text-light fw-semibold">Confirm New Password</label>
-            <input
-              v-model="confirmPassword"
-              type="password"
-              class="form-control bg-dark text-light border-light"
-            />
-          </div>
+        <div class="form-group-t">
+          <label class="form-label-t">New Password</label>
+          <input v-model="newPassword" type="password" class="form-control-t" />
+        </div>
 
-          <button
-            type="submit"
-            class="btn btn-primary w-100 fw-bold btn-lg"
-            :disabled="auth.loading"
-          >
-            {{ auth.loading ? 'Saving...' : 'Save Changes' }}
-          </button>
-        </form>
-      </div>
+        <div class="form-group-t">
+          <label class="form-label-t">Confirm New Password</label>
+          <input v-model="confirmPassword" type="password" class="form-control-t" />
+        </div>
+
+        <button type="submit" class="btn-primary-t" :disabled="auth.loading">
+          {{ auth.loading ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </form>
     </div>
   </div>
 </template>

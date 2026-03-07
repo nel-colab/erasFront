@@ -1,14 +1,12 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/login'
+import { useThemeStore } from '@/store/theme'
 
 const router = useRouter()
 const auth = useAuthStore()
-
-onMounted(() => {
-  // auth.init()
-})
+const theme = useThemeStore()
 
 const isAuth = computed(() => auth.isAuthenticated)
 const username = computed(() => auth.username || 'Jugador')
@@ -105,31 +103,17 @@ const doLogout = () => {
           <!-- Auth (desktop) -->
           <div class="d-none d-lg-inline-flex gap-3 me-4 align-items-center">
             <template v-if="!isAuth">
-              <router-link
-                to="/login"
-                class="btn btn-outline-light fs-5 px-4 py-2"
-                style="height: 50px; min-width: 120px;"
-              >
-                Log in
-              </router-link>
-
-              <router-link
-                to="/register"
-                class="btn btn-primary fs-5 px-4 py-2"
-                style="height: 50px; min-width: 130px;"
-              >
-                Sign up
-              </router-link>
+              <router-link to="/login" class="btn-nav-outline">Log in</router-link>
+              <router-link to="/register" class="btn-nav-primary">Sign up</router-link>
             </template>
 
             <template v-else>
               <div class="dropdown">
                 <button
-                  class="btn btn-outline-light fs-5 px-4 py-2 dropdown-toggle"
+                  class="btn-nav-outline dropdown-toggle"
                   type="button"
                   data-bs-toggle="dropdown"
                   aria-expanded="false"
-                  style="height: 50px;"
                 >
                   {{ username }}
                 </button>
@@ -146,17 +130,21 @@ const doLogout = () => {
             </template>
           </div>
 
+          <!-- Theme toggle -->
+          <button class="theme-toggle me-3" @click="theme.toggle()">
+            {{ theme.dark ? 'Light' : 'Dark' }}
+          </button>
+
           <!-- Social icons -->
           <div class="d-flex gap-2 me-2">
-            <!-- ✅ WhatsApp group link -->
             <a
               href="https://chat.whatsapp.com/KzG5PUekoTkFH1vXaOyX8v"
               target="_blank"
               rel="noopener noreferrer"
-              class="icon-circle"
+              class="social-icon"
               aria-label="Abrir grupo de WhatsApp"
             >
-              <img src="/src/assets/redes/WhatsApp_icon.png" alt="WhatsApp" class="icon-img-full" />
+              <i class="bi bi-whatsapp"></i>
             </a>
 
             <!-- <a
@@ -185,12 +173,16 @@ const doLogout = () => {
 
         <!-- Auth buttons (mobile inside collapse) -->
         <div class="d-lg-none w-100 mt-3">
-          <!-- ✅ FAQ link for mobile -->
+          <button class="theme-toggle w-100 mb-2" style="border-radius: 6px; padding: 0.4rem;" @click="theme.toggle()">
+            {{ theme.dark ? 'Light mode' : 'Dark mode' }}
+          </button>
+
+          <!-- FAQ link for mobile -->
           <router-link to="/faq" class="btn btn-secondary w-100 fw-bold mb-2">FAQ</router-link>
 
           <template v-if="!isAuth">
-            <router-link to="/login" class="btn btn-outline-light w-100 mb-2 fw-bold">Log in</router-link>
-            <router-link to="/register" class="btn btn-primary w-100 fw-bold">Sign up</router-link>
+            <router-link to="/login" class="btn-nav-outline w-100 mb-2 text-center">Log in</router-link>
+            <router-link to="/register" class="btn-nav-primary w-100 text-center">Sign up</router-link>
           </template>
 
           <template v-else>
@@ -232,6 +224,7 @@ const doLogout = () => {
 
 .navbar-nav { text-align: center; }
 .navbar-nav .nav-item { margin-left: 1rem; }
+.navbar-nav .nav-link { font-size: 1.05rem; }
 .navbar-collapse { justify-content: center; }
 
 .logo-img { height: 60px; object-fit: contain; }
@@ -250,7 +243,7 @@ const doLogout = () => {
   letter-spacing: 3px;
   z-index: 2;
 }
-.navbar-title .eras-text { color: rgb(0, 0, 0); }
+.navbar-title .eras-text { color: #ffffff; }
 
 .sub-title {
   font-family: 'Arial', sans-serif;
@@ -269,24 +262,31 @@ const doLogout = () => {
   font-size: 1.7rem;
   font-weight: 700;
   color: #333;
-  text-transform: uppercase;
   letter-spacing: 2px;
 }
 .navbar-title-mobile .eras-text { color: rgb(165, 139, 82); }
 
-.icon-circle {
-  width: 40px;
-  height: 40px;
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  overflow: hidden;
-  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1.4rem;
+  transition: background 0.15s ease, color 0.15s ease;
+  text-decoration: none;
 }
-.icon-img-full { width: 100%; height: 100%; object-fit: cover; }
+.social-icon:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
 
 @media (max-width: 768px) {
   .navbar-nav .nav-item { margin-left: 0.5rem; }
   .navbar-toggler { border-color: transparent; }
-  .icon-circle { width: 36px; height: 36px; }
   .logo-img { height: 50px; }
 }
 
