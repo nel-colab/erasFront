@@ -6,3 +6,9 @@ services:
     ports:
       - "80:80"
     restart: unless-stopped
+    networks:
+      - eras-network
+
+networks:
+  eras-network:
+    external: true
