@@ -15,4 +15,3 @@ services:
 networks:
   eras-network:
     external: true
-    
