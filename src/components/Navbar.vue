@@ -29,7 +29,7 @@ const doLogout = () => {
 </script>
 
 <template>
-  <nav class="navbar navbar-expand-lg navbar-light custom-navbar fixed-top">
+  <nav class="navbar navbar-expand-lg custom-navbar fixed-top">
     <div class="container-fluid align-items-center d-flex">
       <!-- Logo -->
       <router-link class="navbar-brand me-auto" to="/home" aria-label="Ir a inicio">
@@ -73,7 +73,10 @@ const doLogout = () => {
             <router-link class="nav-link" to="/home">Inicio</router-link>
           </li>
           <li class="nav-item active">
-            <router-link class="nav-link" to="/Editions">Cartas</router-link>
+            <router-link class="nav-link" to="/cards">Cartas</router-link>
+          </li>
+          <li class="nav-item active">
+            <router-link class="nav-link" to="/editions">Ediciones</router-link>
           </li>
           <li class="nav-item active">
             <router-link class="nav-link" to="/DeckBuilder">Decks Builder</router-link>
@@ -121,6 +124,12 @@ const doLogout = () => {
                   <li>
                     <router-link class="dropdown-item" to="/profile">Go to Profile</router-link>
                   </li>
+                  <li>
+                    <router-link class="dropdown-item" to="/updates-manager">Manage Updates</router-link>
+                  </li>
+                  <li>
+                    <router-link class="dropdown-item" to="/card-ref">Card Reference Data</router-link>
+                  </li>
                   <li><hr class="dropdown-divider"></li>
                   <li>
                     <button class="dropdown-item text-danger" @click="doLogout">Log out</button>
@@ -146,30 +155,8 @@ const doLogout = () => {
             >
               <i class="bi bi-whatsapp"></i>
             </a>
-
-            <!-- <a
-              href="https://www.instagram.com/muebleria.eras?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw=="
-              target="_blank"
-              rel="noopener noreferrer"
-              class="icon-circle"
-              aria-label="Abrir Instagram"
-            >
-              <img src="/src/assets/redes/Instagram_icon.png" alt="Instagram" class="icon-img-full" />
-            </a>
-
-            <a
-              href="https://www.tiktok.com/@muebleria.eras?lang=es"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="icon-circle"
-              aria-label="Abrir TikTok"
-            >
-              <img src="/src/assets/redes/Tiktok_icon.png" alt="TikTok" class="icon-img-full" />
-            </a> -->
           </div>
         </div>
-        <!-- 🔧 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
-        <!-- Closed the right-side wrapper BEFORE the mobile block. -->
 
         <!-- Auth buttons (mobile inside collapse) -->
         <div class="d-lg-none w-100 mt-3">
@@ -191,6 +178,8 @@ const doLogout = () => {
               <router-link to="/CardsEdit" class="btn btn-secondary w-100 fw-bold">EdiCard</router-link>
             </div>
             <router-link to="/profile" class="btn btn-outline-light w-100 fw-bold mb-2">Go to Profile</router-link>
+            <router-link to="/updates-manager" class="btn btn-secondary w-100 fw-bold mb-2">Manage Updates</router-link>
+            <router-link to="/card-ref" class="btn btn-secondary w-100 fw-bold mb-2">Card Reference Data</router-link>
             <button @click="doLogout" class="btn btn-outline-danger w-100 fw-bold">Log out</button>
           </template>
         </div>
@@ -213,7 +202,6 @@ const doLogout = () => {
 /* 🔹 Navbar style */
 .custom-navbar {
   background-color: #121314 !important;
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.6);
 }
 
 .navbar {

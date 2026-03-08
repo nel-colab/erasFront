@@ -19,12 +19,17 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy: {
+        '/api/drive': {
+          target: env.VITE_DRIVE_API_BASE_URL || 'http://localhost:8081',
+          changeOrigin: true,
+        },
+        '/api/cards': {
+          target: env.VITE_DRIVE_API_BASE_URL || 'http://localhost:8081',
+          changeOrigin: true,
+        },
         '/api': {
           target: env.VITE_API_BASE_URL || 'http://localhost:8080',
           changeOrigin: true,
-          headers: {
-            Origin: env.VITE_API_BASE_URL || 'http://localhost:8080'
-          }
         }
       }
     }

@@ -48,6 +48,7 @@ body {
   background-color: var(--page-bg);
   color: var(--text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
+
 }
 
 /* ─── Auth layout ───────────────────────────────────────────────── */
@@ -224,6 +225,39 @@ body {
   border-top: 1px solid var(--hr-color);
   margin: 1.5rem 0;
 }
+
+/* ─── General action buttons ────────────────────────────────────── */
+.btn-filled {
+  display: inline-block;
+  background-color: var(--btn-bg);
+  color: var(--btn-text);
+  border: none;
+  border-radius: 6px;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.btn-filled:hover:not(:disabled) { background-color: var(--btn-hover); }
+.btn-filled:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-ghost {
+  display: inline-block;
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.btn-ghost:hover { background-color: var(--input-bg); color: var(--text-primary); }
 
 /* ─── Theme toggle button (used in Navbar) ──────────────────────── */
 .theme-toggle {
