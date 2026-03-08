@@ -12,8 +12,8 @@ onMounted(() => theme.init())
     <Navbar />
   </nav>
 
-  <main class="container mt-5 pt-4">
-    <div class="row">
+  <main class="container-fluid mt-5 pt-4">
+    <div style="max-width:1800px;margin:auto;">
       <div class="col">
         <router-view />
       </div>

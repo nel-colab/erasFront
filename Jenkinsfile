@@ -19,7 +19,7 @@ pipeline {
             steps {
                 sh """
                     cp /etc/eras-frontend-staging/.env .env || true
-                    docker build -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                    docker build --build-arg ENVIRONMENT=staging -t ${IMAGE_NAME}:${GIT_COMMIT} .
                 """
             }
         }
@@ -31,7 +31,7 @@ pipeline {
             steps {
                 sh """
                     cp /etc/eras-frontend/.env .env || true
-                    docker build -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                    docker build --build-arg ENVIRONMENT=prod -t ${IMAGE_NAME}:${GIT_COMMIT} .
                 """
             }
         }

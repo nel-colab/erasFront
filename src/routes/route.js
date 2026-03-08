@@ -6,6 +6,10 @@ import Login from '../pages/Login.vue'
 import Register from '../pages/Register.vue'
 import Validate from '../pages/validate.vue'
 import Profile from '../pages/Profile.vue'
+import UpdatesManager from '../pages/UpdatesManager.vue'
+import Editions from '../pages/Editions.vue'
+import Cards from '../pages/Cards.vue'
+import CardRefManager from '../pages/CardRefManager.vue'
 import NotFound from '../pages/NotFound.vue'
 
 const routes = [
@@ -14,6 +18,10 @@ const routes = [
   { path: '/register', component: Register, alias: ['/Register'], meta: { public: true } },
   { path: '/validate', component: Validate, alias: ['/Validate'], meta: { public: true } },
   { path: '/profile', component: Profile },
+  { path: '/updates-manager', component: UpdatesManager },
+  { path: '/editions', component: Editions, alias: ['/Editions'], meta: { public: true } },
+  { path: '/cards', component: Cards, alias: ['/Cards'], meta: { public: true } },
+  { path: '/card-ref', component: CardRefManager },
   { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
 ]
 
