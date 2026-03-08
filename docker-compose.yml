@@ -1,10 +1,13 @@
 services:
   frontend:
-    build: .
-    image: eras-frontend:latest
-    container_name: eras_frontend
+    build:
+      context: .
+      args:
+        ENVIRONMENT: ${ENVIRONMENT:-prod}
+    image: eras-frontend:${ENVIRONMENT:-prod}
+    container_name: eras-frontend-${ENVIRONMENT:-prod}
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-80}:80"
     restart: unless-stopped
     networks:
       - eras-network
