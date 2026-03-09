@@ -10,6 +10,8 @@ import UpdatesManager from '../pages/UpdatesManager.vue'
 import Editions from '../pages/Editions.vue'
 import Cards from '../pages/Cards.vue'
 import CardRefManager from '../pages/CardRefManager.vue'
+import DeckBuilder from '../pages/DeckBuilder.vue'
+import MyDecks from '../pages/MyDecks.vue'
 import NotFound from '../pages/NotFound.vue'
 
 const routes = [
@@ -22,6 +24,8 @@ const routes = [
   { path: '/editions', component: Editions, alias: ['/Editions'], meta: { public: true } },
   { path: '/cards', component: Cards, alias: ['/Cards'], meta: { public: true } },
   { path: '/card-ref', component: CardRefManager },
+  { path: '/deck-builder', component: DeckBuilder, alias: ['/DeckBuilder'], meta: { public: true } },
+  { path: '/my-decks', component: MyDecks },
   { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
 ]
 

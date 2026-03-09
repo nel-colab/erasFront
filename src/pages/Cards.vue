@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import axios from 'axios'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 
 const auth = useAuthStore()
@@ -13,6 +14,11 @@ const CARD_TYPES   = ['creature', 'utility', 'structure']
 const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
 const SS_KINDS     = ['materialization', 'promotion', 'ritual', 'evolution']
 const USAGE_LIMITS = ['once per turn', 'once per turn between copies', 'ultimate effect']
+const RARITIES = ['C', 'UC', 'R', 'SR', 'SEC']
+const COST_MAX          = 8
+const LEVEL_MAX         = 12
+const STRENGTH_MAX      = 15
+const SPECIAL_COST_MAX  = 5
 
 // ── Ref data (classes, instances, kinds, tags) ────────────────────────────────
 const refData = ref({ classes: [], instances: [], kinds: [], tags: [], instanceKinds: {}, keywordEffects: {} })
@@ -75,28 +81,41 @@ const fetchMeta = async () => {
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
-const fEdition    = ref('')
-const fColors     = ref([])   // excluded colors; empty = show all
-const fSubEdition = ref(null)   // null = all, '' = MAIN, '1'/'2'/… = SUBn
-const fName       = ref('')
-const fType       = ref('')
-const fStarter    = ref(false)
+const fEdition        = ref('')
+const fColors         = ref([...COLOR_IDENTITIES])  // included colors; all = no filter
+const fColorMatchMode = ref('any')                  // 'any' = colorIdentity OR colors list; 'identity' = colorIdentity only
+const fSubEdition     = ref(null)   // null = all, '' = MAIN, '1'/'2'/… = SUBn
+const fName           = ref('')
+const fType           = ref('')
+const fStarter        = ref(false)
 const showWithoutMeta = ref(true)
-const cardSize     = ref(200) // px, for responsive grid
-const fCostMin   = ref(0)
-const fCostMax   = ref(8)
-const fLevelMin   = ref(0)
-const fLevelMax   = ref(12)
-const fStrengthMin   = ref(0)
-const fStrengthMax   = ref(15)
+const cardSize        = ref(200) // px, for responsive grid
+const fCostMin        = ref(0)
+const fCostMax        = ref(COST_MAX)
+const fLevelMin       = ref(0)
+const fLevelMax       = ref(LEVEL_MAX)
+const fStrengthMin    = ref(0)
+const fStrengthMax    = ref(STRENGTH_MAX)
 const fSpecialCostMin = ref(0)
-const fSpecialCostMax = ref(5)
-const fRequirement = ref('')
-const fCardNumber = ref('')
+const fSpecialCostMax = ref(SPECIAL_COST_MAX)
+const fSpecialSummon  = ref('')
+const fRequirement    = ref('')
+const fCardNumber     = ref('')
+const fRarity         = ref([])
+const fClases         = ref([])
+const fKeywordEffects = ref([])
+const fEffectTags     = ref([])
 
 const anyFilterActive = computed(() =>
-  !!(fEdition.value || fColors.value.length || fSubEdition.value !== null ||
-     fName.value || fType.value || fStarter.value || fRequirement.value))
+  !!(fEdition.value || fColors.value.length < COLOR_IDENTITIES.length ||
+     fSubEdition.value !== null || fName.value || fType.value || fStarter.value ||
+     fRequirement.value || fCardNumber.value || fRarity.value.length ||
+     fClases.value.length || fKeywordEffects.value.length || fEffectTags.value.length ||
+     fSpecialSummon.value ||
+     fCostMin.value > 0 || fCostMax.value < COST_MAX ||
+     fLevelMin.value > 0 || fLevelMax.value < LEVEL_MAX ||
+     fStrengthMin.value > 0 || fStrengthMax.value < STRENGTH_MAX ||
+     fSpecialCostMin.value > 0 || fSpecialCostMax.value < SPECIAL_COST_MAX))
 
 watch(anyFilterActive, v => { if (v) showWithoutMeta.value = false })
 watch([fEdition, fSubEdition], () => { fetchDriveCards(); fetchMeta() })
@@ -116,19 +135,105 @@ const metaMap = computed(() => {
 const allMerged  = computed(() =>
   driveCards.value.map(dc => ({ ...dc, meta: metaMap.value.get(dc.edition + '|' + dc.number) ?? null }))
 )
-const visibleCards = computed(() =>
-  allMerged.value
+const visibleCards = computed(() => {
+  const allColors       = fColors.value.length === COLOR_IDENTITIES.length
+  const costFull        = fCostMin.value === 0 && fCostMax.value === COST_MAX
+  const levelFull       = fLevelMin.value === 0 && fLevelMax.value === LEVEL_MAX
+  const strengthFull    = fStrengthMin.value === 0 && fStrengthMax.value === STRENGTH_MAX
+  const specCostFull    = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
+
+  return allMerged.value
     .filter(c => showWithoutMeta.value || c.meta !== null)
-    .filter(c => !fColors.value.length || !fColors.value.includes(c.color_identity))
-    .filter(c => !fName.value    || c.name?.toLowerCase().includes(fName.value.toLowerCase()))
-    .filter(c => !fType.value    || c.meta?.cardType === fType.value)
-    .filter(c => !fStarter.value || c.meta?.starter === true)
+    // Name: regex, falls back to includes
     .filter(c => {
-      const lv = c.meta?.level
-      if (lv == null) return true
-      return lv >= fLevelMin.value && lv <= fLevelMax.value
+      if (!fName.value) return true
+      try { return new RegExp(fName.value, 'i').test(c.name ?? '') }
+      catch { return (c.name ?? '').toLowerCase().includes(fName.value.toLowerCase()) }
     })
-)
+    // Type: single-value field, case-insensitive match
+    .filter(c => !fType.value || c.meta?.cardType?.toLowerCase() === fType.value.toLowerCase())
+    // Color: identity-only mode checks colorIdentity; any-color mode also checks meta.colors list
+    .filter(c => {
+      if (allColors) return true
+      if (fColorMatchMode.value === 'identity') {
+        if (!c.color_identity) return true
+        return fColors.value.includes(c.color_identity)
+      }
+      // 'any': match colorIdentity OR any entry in meta.colors
+      const colorsToCheck = [...new Set([c.color_identity, ...(c.meta?.colors ?? [])].filter(Boolean))]
+      if (!colorsToCheck.length) return true
+      return colorsToCheck.some(col => fColors.value.includes(col))
+    })
+    // Classes: card must have at least one selected class
+    .filter(c => !fClases.value.length || c.meta?.cardClasses?.some(cl => fClases.value.includes(cl)))
+    // Cost: null cost passes; full interval = all pass
+    .filter(c => {
+      if (costFull) return true
+      const v = c.meta?.cost
+      if (v == null) return true
+      return v >= fCostMin.value && v <= fCostMax.value
+    })
+    // Level: null passes; full interval = all pass
+    .filter(c => {
+      if (levelFull) return true
+      const v = c.meta?.level
+      if (v == null) return true
+      return v >= fLevelMin.value && v <= fLevelMax.value
+    })
+    // Strength: null (no-strength cards) always passes
+    .filter(c => {
+      const v = c.meta?.strength
+      if (v == null) return true
+      if (strengthFull) return true
+      return v >= fStrengthMin.value && v <= fStrengthMax.value
+    })
+    // Special cost: full interval = all pass; otherwise cards without special cost are hidden
+    .filter(c => {
+      if (specCostFull) return true
+      const v = c.meta?.specialCost
+      if (v == null) return false
+      return v >= fSpecialCostMin.value && v <= fSpecialCostMax.value
+    })
+    // Special summon kind
+    .filter(c => !fSpecialSummon.value || c.meta?.specialSummonKind === fSpecialSummon.value)
+    // Requirement: regex
+    .filter(c => {
+      if (!fRequirement.value) return true
+      try { return new RegExp(fRequirement.value, 'i').test(c.meta?.requirement ?? '') }
+      catch { return (c.meta?.requirement ?? '').toLowerCase().includes(fRequirement.value.toLowerCase()) }
+    })
+    // Card number: regex on the numeric value
+    .filter(c => {
+      if (!fCardNumber.value) return true
+      const num = String(c.number ?? '')
+      try { return new RegExp(fCardNumber.value, 'i').test(num) }
+      catch { return num.includes(fCardNumber.value) }
+    })
+    // Rarity: multiselect — card must match at least one selected rarity
+    .filter(c => !fRarity.value.length || fRarity.value.includes(c.meta?.rarity))
+    // Starter
+    .filter(c => !fStarter.value || c.meta?.starter === true)
+    // Keyword effects: search in card's keywordEffects list AND in effect text
+    .filter(c => {
+      if (!fKeywordEffects.value.length) return true
+      const kwList = [...(c.meta?.keywordEffects ?? []), ...(c.meta?.inheritKeywordEffects ?? [])]
+      const effList = [...(c.meta?.effects ?? []), ...(c.meta?.inheritEffects ?? [])]
+      return fKeywordEffects.value.some(kw => {
+        if (kwList.some(ke => ke.keyword === kw)) return true
+        return effList.some(eff =>
+          (eff.effectBlocks ?? []).some(b =>
+            [b.activationCondition, b.cost, b.resolution].some(t => t?.toLowerCase().includes(kw.toLowerCase()))
+          )
+        )
+      })
+    })
+    // Effect tags: card must have at least one effect with at least one selected tag
+    .filter(c => {
+      if (!fEffectTags.value.length) return true
+      const effList = [...(c.meta?.effects ?? []), ...(c.meta?.inheritEffects ?? [])]
+      return effList.some(eff => eff.tags?.some(t => fEffectTags.value.includes(t)))
+    })
+})
 
 // ── Available filter options (dynamic) ───────────────────────────────────────
 const availableSubs = computed(() => {
@@ -144,6 +249,10 @@ const availableTypes = computed(() =>
 const availableSpecialSummons = computed(() =>
   [...new Set(metaCards.value.map(c => c.specialSummonKind).filter(Boolean))].sort())
 
+const classes                = computed(() => refData.value.classes ?? [])
+const availableKeywordEffects = computed(() => Object.keys(refData.value.keywordEffects ?? {}))
+const availableTags          = computed(() => refData.value.tags ?? [])
+
 const subLabel   = s => s === null || s === '' ? 'MAIN' : `SUB${s}`
 const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'White' }[c] ?? c)
 
@@ -152,6 +261,27 @@ const detailCard = ref(null)
 const showDetail = ref(false)
 const openDetail = card => { detailCard.value = card; showDetail.value = true }
 const closeDetail = () => { showDetail.value = false; detailCard.value = null }
+
+const detailIndex = computed(() =>
+  detailCard.value ? visibleCards.value.findIndex(c => c.id === detailCard.value.id) : -1
+)
+const prevCard = () => {
+  const i = detailIndex.value
+  if (i > 0) { editingNameId.value = null; detailCard.value = visibleCards.value[i - 1] }
+}
+const nextCard = () => {
+  const i = detailIndex.value
+  if (i < visibleCards.value.length - 1) { editingNameId.value = null; detailCard.value = visibleCards.value[i + 1] }
+}
+const onModalKey = e => {
+  if (!showDetail.value) return
+  if (e.key === 'ArrowLeft')  prevCard()
+  if (e.key === 'ArrowRight') nextCard()
+}
+watch(showDetail, v => {
+  if (v) window.addEventListener('keydown', onModalKey)
+  else   window.removeEventListener('keydown', onModalKey)
+})
 
 // ── Card form modal ───────────────────────────────────────────────────────────
 const showCardForm  = ref(false)
@@ -163,8 +293,8 @@ const blankForm = () => ({
   cardName: '', cardType: 'creature', edition: fEdition.value || '',
   colorIdentity: 'W', cardNumber: null, strength: null, cost: null, level: null,
   starter: false, cardClasses: [], regulation: '', specialCost: null,
-  specialSummonKind: null, requirement: '', effects: [], inheritEffects: [],
-  keywordEffects: [], inheritKeywordEffects: [],
+  specialSummonKind: null, requirement: '', rarity: null, colors: [],
+  effects: [], inheritEffects: [], keywordEffects: [], inheritKeywordEffects: [],
 })
 const form = ref(blankForm())
 
@@ -176,6 +306,7 @@ const openCreate = (driveCard = null) => {
     form.value.colorIdentity = driveCard.color_identity || ''
     form.value.cardNumber    = driveCard.number         ?? null
     form.value.cardName      = driveCard.name           || ''
+    form.value.colors        = driveCard.color_identity ? [driveCard.color_identity] : []
   }
   formError.value = ''
   driveCardPreview.value = null
@@ -202,6 +333,8 @@ const openEdit = card => {
     specialCost:       m?.specialCost       ?? null,
     specialSummonKind: m?.specialSummonKind ?? null,
     requirement:       m?.requirement       ?? '',
+    rarity:            m?.rarity            ?? null,
+    colors:            m?.colors?.length ? [...m.colors] : (m?.colorIdentity ? [m.colorIdentity] : []),
     effects:                JSON.parse(JSON.stringify(m?.effects               ?? [])),
     inheritEffects:         JSON.parse(JSON.stringify(m?.inheritEffects        ?? [])),
     keywordEffects:         JSON.parse(JSON.stringify(m?.keywordEffects        ?? [])),
@@ -236,6 +369,8 @@ const saveCard = async () => {
     specialCost:   form.value.specialCost   != null ? Number(form.value.specialCost)   : null,
     specialSummonKind: form.value.specialSummonKind || null,
     requirement:   form.value.requirement   || null,
+    rarity:        form.value.rarity        || null,
+    colors:        form.value.colors.length ? form.value.colors : null,
     effects:               form.value.effects,
     inheritEffects:        form.value.inheritEffects,
     keywordEffects:        form.value.keywordEffects,
@@ -414,7 +549,7 @@ const renderEffectHtml = (ef) => {
       parts.push(blockHtml)
     }
   })
-  return parts.join(' ') || 'empty effect'
+  return parts.join(' ') || 'efecto vacío'
 }
 
 const renderCardKwEffect = (ke) => {
@@ -471,7 +606,33 @@ const openKeywordEffectModal = (target = 'keywordEffects', idx = null) => {
 
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-onMounted(() => { fetchEditions(); fetchDriveCards(); fetchMeta(); fetchRef() })
+// ── Inline name editing ────────────────────────────────────────────────────────
+const editingNameId    = ref(null)
+const editingNameValue = ref('')
+
+const startEditName = (card, event) => {
+  event.stopPropagation()
+  editingNameId.value    = card.id
+  editingNameValue.value = card.name
+}
+
+const saveCardName = async (card) => {
+  const name = editingNameValue.value.trim()
+  editingNameId.value = null
+  if (!name || name === card.name) return
+  try {
+    await axios.patch(`/api/drive/cards/db/${card.id}/name`, { name })
+    const dc = driveCards.value.find(c => c.id === card.id)
+    if (dc) dc.name = name
+    if (detailCard.value?.id === card.id) detailCard.value = { ...detailCard.value, name }
+  } catch { /* ignore */ }
+}
+
+const route = useRoute()
+onMounted(() => {
+  if (route.query.edition) fEdition.value = route.query.edition
+  fetchEditions(); fetchDriveCards(); fetchMeta(); fetchRef()
+})
 
 watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
   const anyOpen = d || f || e
@@ -493,7 +654,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <span class="sidebar-toggle-icon">&#9776;</span>
         </button>
 
-      <div class="filter-sidebar-sticky">
+
       <div class="filter-sidebar" :class="{ 'filter-sidebar--open': sidebarOpen }">
         <div class="filter-sidebar-inner">
 
@@ -517,29 +678,32 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <label class="filter-label">Color</label>
             <div class="filter-chips filter-chips--colors">
               <button v-for="c in COLOR_IDENTITIES" :key="c" class="chip chip--color"
-                :class="['color-' + c.toLowerCase(), { active: !fColors.includes(c) }]"
-                @click="fColors = fColors.includes(c) ? fColors.filter(x => x !== c) : [...fColors, c]">{{ colorLabel(c) }}</button>
+                :class="['color-' + c.toLowerCase(), { active: fColors.includes(c) }]"
+                @click="() => { if (fColors.length === COLOR_IDENTITIES.length) { fColors = [c] } else if (fColors.includes(c)) { const next = fColors.filter(x => x !== c); fColors = next.length ? next : [...COLOR_IDENTITIES] } else { fColors = [...fColors, c] } }">{{ colorLabel(c) }}</button>
+            </div>
+            <div class="filter-mode-toggle">
+              <button class="mode-btn" :class="{ active: fColorMatchMode === 'any' }" @click="fColorMatchMode = 'any'">Cualquier color</button>
+              <button class="mode-btn" :class="{ active: fColorMatchMode === 'identity' }" @click="fColorMatchMode = 'identity'">Solo identidad</button>
             </div>
           </div>
 
           <!-- Clases -->
-          <div class="filter-group">
+          <div v-if="classes.length" class="filter-group">
             <label class="filter-label">Clases</label>
-            <select v-model="fClases" class="filter-select">
-              <option value="">Todas</option>
-              <option v-for="cl in classes" :key="cl" :value="cl">
-                {{ cl }}
-              </option>
-            </select>
+            <div class="filter-chips">
+              <button v-for="cl in classes" :key="cl" class="chip"
+                :class="{ active: fClases.includes(cl) }"
+                @click="fClases = fClases.includes(cl) ? fClases.filter(x => x !== cl) : [...fClases, cl]">{{ cl }}</button>
+            </div>
           </div>
 
           <!-- Coste -->
           <div class="filter-group">
             <label class="filter-label">
-              Coste<span v-if="fCostMax > 0 || fCostMax < 8"> ({{ fCostMin }}–{{ fCostMax }})</span><span v-else> (all)</span>
+              Coste<span v-if="fCostMin > 0 || fCostMax < COST_MAX"> ({{ fCostMin }}–{{ fCostMax }})</span><span v-else> (Todos)</span>
             </label>
             <div class="dual-range"
-              :style="{ '--pct-min': (fCostMin / 8 * 100) + '%', '--pct-max': (fCostMax / 8 * 100) + '%' }">
+              :style="{ '--pct-min': (fCostMin / COST_MAX * 100) + '%', '--pct-max': (fCostMax / COST_MAX * 100) + '%' }">
               <div class="dual-range-track"></div>
               <input type="range" min="0" max="8" step="1" v-model.number="fCostMin"
                 @input="fCostMax = fCostMin > fCostMax ? fCostMin : fCostMax" />
@@ -551,14 +715,14 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <!-- Nivel -->
           <div class="filter-group">
             <label class="filter-label">
-              Nivel<span v-if="fLevelMin > 0 || fLevelMax < 6"> ({{ fLevelMin }}–{{ fLevelMax }})</span><span v-else> (Todos)</span>
+              Nivel<span v-if="fLevelMin > 0 || fLevelMax < LEVEL_MAX"> ({{ fLevelMin }}–{{ fLevelMax }})</span><span v-else> (Todos)</span>
             </label>
             <div class="dual-range"
-              :style="{ '--pct-min': (fLevelMin / 6 * 100) + '%', '--pct-max': (fLevelMax / 6 * 100) + '%' }">
+              :style="{ '--pct-min': (fLevelMin / LEVEL_MAX * 100) + '%', '--pct-max': (fLevelMax / LEVEL_MAX * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" max="6" step="1" v-model.number="fLevelMin"
+              <input type="range" min="0" :max="LEVEL_MAX" step="1" v-model.number="fLevelMin"
                 @input="fLevelMax = fLevelMin > fLevelMax ? fLevelMin : fLevelMax" />
-              <input type="range" min="0" max="6" step="1" v-model.number="fLevelMax"
+              <input type="range" min="0" :max="LEVEL_MAX" step="1" v-model.number="fLevelMax"
                 @input="fLevelMin = fLevelMax < fLevelMin ? fLevelMax : fLevelMin" />
             </div>
           </div>
@@ -566,14 +730,14 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <!-- Fuerza -->
           <div class="filter-group">
             <label class="filter-label">
-              Fuerza<span v-if="fStrengthMax > 0 || fStrengthMax < 8"> ({{ fStrengthMin }}–{{ fStrengthMax }})</span><span v-else> (all)</span>
+              Fuerza<span v-if="fStrengthMin > 0 || fStrengthMax < STRENGTH_MAX"> ({{ fStrengthMin }}–{{ fStrengthMax }})</span><span v-else> (Todos)</span>
             </label>
             <div class="dual-range"
-              :style="{ '--pct-min': (fStrengthMin / 8 * 100) + '%', '--pct-max': (fStrengthMax / 8 * 100) + '%' }">
+              :style="{ '--pct-min': (fStrengthMin / STRENGTH_MAX * 100) + '%', '--pct-max': (fStrengthMax / STRENGTH_MAX * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" max="8" step="1" v-model.number="fStrengthMin"
+              <input type="range" min="0" :max="STRENGTH_MAX" step="1" v-model.number="fStrengthMin"
                 @input="fStrengthMax = fStrengthMin > fStrengthMax ? fStrengthMin : fStrengthMax" />
-              <input type="range" min="0" max="8" step="1" v-model.number="fStrengthMax"
+              <input type="range" min="0" :max="STRENGTH_MAX" step="1" v-model.number="fStrengthMax"
                 @input="fStrengthMin = fStrengthMax < fStrengthMin ? fStrengthMax : fStrengthMin" />
             </div>
           </div>
@@ -590,14 +754,14 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <!-- Coste especial -->
           <div class="filter-group">
             <label class="filter-label">
-              Coste especial<span v-if="fSpecialCostMax > 0 || fSpecialCostMax < 8"> ({{ fSpecialCostMin }}–{{ fSpecialCostMax }})</span><span v-else> (all)</span>
+              Coste especial<span v-if="fSpecialCostMin > 0 || fSpecialCostMax < SPECIAL_COST_MAX"> ({{ fSpecialCostMin }}–{{ fSpecialCostMax }})</span><span v-else> (Todos)</span>
             </label>
             <div class="dual-range"
-              :style="{ '--pct-min': (fSpecialCostMin / 8 * 100) + '%', '--pct-max': (fSpecialCostMax / 8 * 100) + '%' }">
+              :style="{ '--pct-min': (fSpecialCostMin / SPECIAL_COST_MAX * 100) + '%', '--pct-max': (fSpecialCostMax / SPECIAL_COST_MAX * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" max="8" step="1" v-model.number="fSpecialCostMin"
+              <input type="range" min="0" :max="SPECIAL_COST_MAX" step="1" v-model.number="fSpecialCostMin"
                 @input="fSpecialCostMax = fSpecialCostMin > fSpecialCostMax ? fSpecialCostMin : fSpecialCostMax" />
-              <input type="range" min="0" max="8" step="1" v-model.number="fSpecialCostMax"
+              <input type="range" min="0" :max="SPECIAL_COST_MAX" step="1" v-model.number="fSpecialCostMax"
                 @input="fSpecialCostMin = fSpecialCostMax < fSpecialCostMin ? fSpecialCostMax : fSpecialCostMin" />
             </div>
           </div>
@@ -608,9 +772,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <input v-model="fRequirement" class="filter-input" placeholder="Buscar por requerimiento…" />
           </div>
 
-
+          <!-- Edicion -->
           <div class="filter-group">
-            <label class="filter-label">Edition</label>
+            <label class="filter-label">Edición</label>
             <select v-model="fEdition" class="filter-select">
               <option value="">Todas</option>
               <option v-for="ed in editions" :key="ed.editionId" :value="ed.editionId">
@@ -625,6 +789,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <input v-model="fCardNumber" class="filter-input" placeholder="Buscar por número de carta…" />
           </div>
 
+          <!-- Número de carta -->
           <div v-if="availableSubs.length > 1" class="filter-group">
             <label class="filter-label">Sub-edition</label>
             <div class="filter-chips">
@@ -635,24 +800,55 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             </div>
           </div>
 
+          <!-- Rareza -->
+          <div class="filter-group">
+            <label class="filter-label">Rareza</label>
+            <div class="filter-chips">
+              <button v-for="r in RARITIES" :key="r" class="chip"
+                :class="{ active: fRarity.includes(r) }"
+                @click="fRarity = fRarity.includes(r) ? fRarity.filter(x => x !== r) : [...fRarity, r]">{{ r }}</button>
+            </div>
+          </div>
+
+          <!-- Starter -->
           <div class="filter-group filter-group--row">
             <input type="checkbox" v-model="fStarter" class="filter-check" />
-            <label class="filter-label">Starter</label>
+            <label class="filter-label">Iniciador</label>
           </div>
+
+          <!-- Keywords effects -->
+          <div v-if="availableKeywordEffects.length" class="filter-group">
+            <label class="filter-label">Efectos Keyword</label>
+            <div class="filter-chips">
+              <button v-for="kw in availableKeywordEffects" :key="kw" class="chip"
+                :class="{ active: fKeywordEffects.includes(kw) }"
+                @click="fKeywordEffects = fKeywordEffects.includes(kw) ? fKeywordEffects.filter(x => x !== kw) : [...fKeywordEffects, kw]">{{ kw }}</button>
+            </div>
+          </div>
+
+          <!-- Tags de efectos -->
+          <div v-if="availableTags.length" class="filter-group">
+            <label class="filter-label">Tags de efectos</label>
+            <div class="filter-chips">
+              <button v-for="t in availableTags" :key="t" class="chip"
+                :class="{ active: fEffectTags.includes(t) }"
+                @click="fEffectTags = fEffectTags.includes(t) ? fEffectTags.filter(x => x !== t) : [...fEffectTags, t]">{{ t }}</button>
+            </div>
+          </div>
+
 
           <div class="filter-group filter-group--row">
             <input type="checkbox" v-model="showWithoutMeta" :disabled="anyFilterActive" class="filter-check" />
-            <label class="filter-label" :class="{ muted: anyFilterActive }">NO METADATA</label>
+            <label class="filter-label" :class="{ muted: anyFilterActive }">Cartas sin metadatos</label>
           </div>
 
           <div class="filter-group">
-            <label class="filter-label">Card Size ({{ cardSize }}px)</label>
+            <label class="filter-label">Tamaño de cartas ({{ cardSize }}px)</label>
             <input class="filter-input" type="range" min="100" max="500" step="10" v-model="cardSize" />
           </div>
 
         </div>
       </div>
-      </div> <!-- /filter-sidebar-sticky -->
       </div> <!-- /filter-col -->
 
       <!-- ── Main content ───────────────────────────────────────────── -->
@@ -661,11 +857,11 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
         <!-- ── Status / count ─────────────────────────────────────── -->
         <div v-if="loadingDrive" class="cp-empty">Loading cards…</div>
         <div v-else-if="visibleCards.length === 0" class="cp-empty">
-          No cards found{{ anyFilterActive ? ' for the current filters' : '' }}.
+          No se encontraron cartas{{ anyFilterActive ? ' para los filtros actuales' : '' }}.
         </div>
         <div v-if="visibleCards.length > 0" class="cp-count">
-          {{ visibleCards.length }} card{{ visibleCards.length !== 1 ? 's' : '' }}
-          <span v-if="anyFilterActive"> (filtered)</span>
+          {{ visibleCards.length }} carta{{ visibleCards.length !== 1 ? 's' : '' }}
+          <span v-if="anyFilterActive"> (filtradas)</span>
         </div>
 
         <!-- ── Card grid ───────────────────────────────────────────── -->
@@ -682,11 +878,11 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
       >
         <div class="card-frame">
           <img :src="card.image_url" :alt="card.name" class="card-img" loading="lazy" />
-          <div v-if="!card.meta" class="no-meta-badge">NO METADATA</div>
+          <div v-if="!card.meta" class="no-meta-badge">Sin  metadatos</div>
         </div>
 
         <div class="card-label">
-          <span class="card-name" style="text-align: center;">{{ card.name }}</span>
+          <span class="card-name">{{ card.name }}</span>
         </div>
       </div>
     </div>
@@ -699,8 +895,26 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <Teleport to="body">
       <div v-if="showDetail" class="modal-overlay" @click.self="closeDetail">
+        <button class="modal-nav modal-nav--prev" @click="prevCard" :disabled="detailIndex <= 0">
+          <i class="bi bi-chevron-left"></i>
+        </button>
         <div class="modal-box">
-            <h1 class="modal-card-name">{{ detailCard.name }}</h1>
+            <div class="modal-name-row">
+              <input
+                v-if="editingNameId === detailCard.id"
+                class="modal-name-input"
+                v-model="editingNameValue"
+                @blur="saveCardName(detailCard)"
+                @keyup.enter="$event.target.blur()"
+                @keyup.escape="editingNameId = null"
+              />
+              <template v-else>
+                <h1 class="modal-card-name">{{ detailCard.name }}</h1>
+                <button v-if="isAuth" class="btn-modal-edit-name" @click="startEditName(detailCard, $event)" title="Edit name">
+                  <i class="bi bi-pencil"></i>
+                </button>
+              </template>
+            </div>
             <button class="modal-close" @click="closeDetail">✕</button>
             <div class="form-with-preview">
               
@@ -720,26 +934,28 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                   </div>
 
                   <div v-if="!detailCard.meta" class="no-meta-notice">
-                    No metadata yet.
-                    <button v-if="isAuth" class="btn-filled btn-sm" @click="openCreate(detailCard)">Create</button>
+                    Carta sin metadatos aun.
+                    <button v-if="isAuth" class="btn-filled btn-sm" @click="openCreate(detailCard)">Crear</button>
                   </div>
 
                   <template v-if="detailCard.meta">
                     <div class="meta-grid-badges">
-                      <div class="meta-row" v-if="detailCard.meta.cardType"><span class="meta-k">Type</span><span class="meta-v">{{ detailCard.meta.cardType }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.cost != null"><span class="meta-k">Cost</span><span class="meta-v">{{ detailCard.meta.cost }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.strength != null"><span class="meta-k">Strength</span><span class="meta-v">{{ detailCard.meta.strength }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.level != null"><span class="meta-k">Level</span><span class="meta-v">{{ detailCard.meta.level }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.starter != null"><span class="meta-k">Starter</span><span class="meta-v">{{ detailCard.meta.starter ? 'Yes' : 'No' }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.cardClasses?.length"><span class="meta-k">Classes</span><span class="meta-v">{{ detailCard.meta.cardClasses.join(', ') }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.regulation"><span class="meta-k">Regulation</span><span class="meta-v">{{ detailCard.meta.regulation }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.specialCost != null"><span class="meta-k">Special Cost</span><span class="meta-v">{{ detailCard.meta.specialCost }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">SS Kind</span><span class="meta-v">{{ detailCard.meta.specialSummonKind }}</span></div>
-                      <div class="meta-row meta-row--full" v-if="detailCard.meta.requirement"><span class="meta-k">Requirement</span><span class="meta-v">{{ detailCard.meta.requirement }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.cardType"><span class="meta-k">Tipo de carta</span><span class="meta-v">{{ detailCard.meta.cardType }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.cost != null"><span class="meta-k">Coste</span><span class="meta-v">{{ detailCard.meta.cost }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.strength != null"><span class="meta-k">Fuerza</span><span class="meta-v">{{ detailCard.meta.strength }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.level != null"><span class="meta-k">Nivel</span><span class="meta-v">{{ detailCard.meta.level }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.starter == true"><span class="meta-k">Iniciador</span><span class="meta-v">Si</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.cardClasses?.length"><span class="meta-k">Clases</span><span class="meta-v">{{ detailCard.meta.cardClasses.join(', ') }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.regulation"><span class="meta-k">Regulación</span><span class="meta-v">{{ detailCard.meta.regulation }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.specialCost != null"><span class="meta-k">Coste Especial</span><span class="meta-v">{{ detailCard.meta.specialCost }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">Método de Invocación Especial</span><span class="meta-v">{{ detailCard.meta.specialSummonKind }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.rarity"><span class="meta-k">Rareza</span><span class="meta-v">{{ detailCard.meta.rarity }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.colors?.length"><span class="meta-k">Colores</span><span class="meta-v">{{ detailCard.meta.colors.join(', ') }}</span></div>
+                      <div class="meta-row meta-row--full" v-if="detailCard.meta.requirement"><span class="meta-k">Requerimiento</span><span class="meta-v">{{ detailCard.meta.requirement }}</span></div>
                     </div>
 
                     <div v-if="detailCard.meta.effects?.length || detailCard.meta.keywordEffects?.length" class="effects-section">
-                      <div class="effects-label">Effects</div>
+                      <div class="effects-label">Efectos</div>
                       <div v-for="(ef, i) in detailCard.meta.effects" :key="i" class="effect-pill">
                         <span v-html="renderEffectHtml(ef)"></span>
                         <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
@@ -750,7 +966,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                     </div>
 
                     <div v-if="detailCard.meta.inheritEffects?.length || detailCard.meta.inheritKeywordEffects?.length" class="effects-section">
-                      <div class="effects-label">Inherit Effects</div>
+                      <div class="effects-label">Efectos heredados</div>
                       <div v-for="(ef, i) in detailCard.meta.inheritEffects" :key="i" class="effect-pill">
                         <span v-html="renderEffectHtml(ef)"></span>
                         <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
@@ -762,7 +978,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                   </template>
 
                   <div class="modal-actions" v-if="isAuth && detailCard.meta">
-                    <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Edit metadata</button>
+                    <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Editar</button>
                   </div>
                 </div>
 
@@ -780,6 +996,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
             </div><!-- /form-with-preview -->
         </div>
+        <button class="modal-nav modal-nav--next" @click="nextCard" :disabled="detailIndex >= visibleCards.length - 1">
+          <i class="bi bi-chevron-right"></i>
+        </button>
       </div>
     </Teleport>
 
@@ -790,7 +1009,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
       <div v-if="showCardForm" class="modal-overlay" @click.self="showCardForm = false">
         <div class="modal-box modal-box--form" :class="{ 'modal-box--form-wide': driveCardPreview || previewLoading }">
           <button class="modal-close" @click="showCardForm = false">✕</button>
-          <h3 class="modal-form-title">{{ editingMetaId ? 'Edit Card' : 'New Card' }}</h3>
+          <h3 class="modal-form-title">{{ editingMetaId ? 'Editar carta' : 'Carta nueva' }}</h3>
           <p v-if="formError" class="form-error">{{ formError }}</p>
 
           <div class="form-with-preview">
@@ -798,11 +1017,11 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <div class="form-grid">
             <!-- Row 1 -->
             <div class="form-field">
-              <label>Card Name *</label>
+              <label>Nombre *</label>
               <input v-model="form.cardName" @blur="lookupDriveCard" />
             </div>
             <div class="form-field">
-              <label>Type</label>
+              <label>Tipo</label>
               <select v-model="form.cardType">
                 <option v-for="t in CARD_TYPES" :key="t" :value="t">{{ t }}</option>
               </select>
@@ -810,67 +1029,88 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
             <!-- Row 2 -->
             <div class="form-field">
-              <label>Edition *</label>
+              <label>Edición *</label>
               <input v-model="form.edition" :disabled="!!editingMetaId" />
             </div>
             <div class="form-field">
-              <label>Color Identity</label>
+              <label>Identidad de color</label>
               <select v-model="form.colorIdentity">
                 <option v-for="c in COLOR_IDENTITIES" :key="c" :value="c">{{ c }}</option>
               </select>
             </div>
 
+            <!-- Colors list -->
+            <div class="form-field form-field--full">
+              <label>Colores <span class="field-hint">(puede ser más de uno)</span></label>
+              <div class="color-chips-row">
+                <button v-for="c in COLOR_IDENTITIES" :key="c" type="button"
+                  class="chip chip--color"
+                  :class="['color-' + c.toLowerCase(), { active: form.colors.includes(c) }]"
+                  @click="form.colors = form.colors.includes(c) ? form.colors.filter(x => x !== c) : [...form.colors, c]">{{ colorLabel(c) }}</button>
+              </div>
+            </div>
+
             <!-- Row 3 -->
             <div class="form-field">
-              <label>Card #</label>
+              <label>Número de carta</label>
               <input v-model.number="form.cardNumber" type="number" />
             </div>
             <div class="form-field">
-              <label>Cost</label>
+              <label>Coste</label>
               <input v-model.number="form.cost" type="number" />
             </div>
 
             <!-- Row 4 -->
             <div class="form-field">
-              <label>Strength</label>
+              <label>Fuerza</label>
               <input v-model.number="form.strength" type="number" />
             </div>
             <div class="form-field">
-              <label>Level</label>
+              <label>Nivel</label>
               <input v-model.number="form.level" type="number" />
             </div>
 
             <!-- Row 5 -->
             <div class="form-field">
-              <label>Regulation</label>
+              <label>Regulación</label>
               <input v-model="form.regulation" />
             </div>
+
             <div class="form-field">
-              <label>Special Cost</label>
-              <input v-model.number="form.specialCost" type="number" />
+              <label>Rareza</label>
+              <select v-model="form.rarity">
+                <option v-for="r in RARITIES" :key="r" :value="r">{{ r }}</option>
+              </select>
             </div>
 
             <!-- Row 6 -->
             <div class="form-field">
-              <label>Special Summon Kind</label>
+              <label>Método de invoación especial</label>
               <select v-model="form.specialSummonKind">
                 <option :value="null">— none —</option>
                 <option v-for="k in SS_KINDS" :key="k" :value="k">{{ k }}</option>
               </select>
             </div>
+
             <div class="form-field">
-              <label>Requirement</label>
+              <label>Coste especial</label>
+              <input v-model.number="form.specialCost" type="number" />
+            </div>
+
+
+            <div class="form-field">
+              <label>Requerimiento</label>
               <input v-model="form.requirement" />
             </div>
 
             <!-- Starter -->
             <div class="form-field form-field--inline">
-              <label><input type="checkbox" v-model="form.starter" /> Starter card</label>
+              <label><input type="checkbox" v-model="form.starter" /> Iniciador</label>
             </div>
 
             <!-- Classes multi-select -->
             <div class="form-field full" v-if="refData.classes.length">
-              <label>Classes</label>
+              <label>Clases</label>
               <div class="chip-select">
                 <button
                   v-for="cls in refData.classes" :key="cls"
@@ -882,21 +1122,23 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               </div>
             </div>
             <div v-else class="form-field full">
-              <label>Classes <span class="hint">(add classes via /api/cards/ref to enable this picker)</span></label>
+              <label>Clases <span class="hint">(add classes via /api/cards/ref to enable this picker)</span></label>
             </div>
 
             <!-- Effects -->
             <div class="form-field full">
               <div class="effect-section-header">
-                <label>Effects</label>
-                <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('effects')">+ Add effect</button>
-                <button type="button" class="btn-ghost btn-xs" @click="openKeywordEffectModal('keywordEffects')">+ Add keyword effect</button>
+                <label>Efectos</label>
+                <div class="effect-btn-group">
+                  <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('effects')">+ Añadir efecto</button>
+                  <button type="button" class="btn-ghost btn-xs" @click="openKeywordEffectModal('keywordEffects')">+ Añadir efecto keyword</button>
+                </div>
               </div>
               <div v-if="form.effects.length" class="effect-list">
                 <div v-for="(ef, i) in form.effects" :key="i" class="effect-list-item">
                   <span class="effect-preview" v-html="renderEffectHtml(ef)"></span>
                   <div class="effect-item-actions">
-                    <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('effects', i)">Edit</button>
+                    <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('effects', i)">Editar</button>
                     <button type="button" class="btn-ghost btn-xs btn-danger" @click="removeEffect('effects', i)">✕</button>
                   </div>
                 </div>
@@ -905,26 +1147,28 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                 <div v-for="(ke, i) in form.keywordEffects" :key="'kw'+i" class="effect-list-item">
                   <span class="effect-preview kw-preview" v-html="renderCardKwEffect(ke)"></span>
                   <div class="effect-item-actions">
-                    <button type="button" class="btn-ghost btn-xs" @click="openKeywordEffectModal('keywordEffects', i)">Edit</button>
+                    <button type="button" class="btn-ghost btn-xs" @click="openKeywordEffectModal('keywordEffects', i)">Editar</button>
                     <button type="button" class="btn-ghost btn-xs btn-danger" @click="removeKeywordEffect('keywordEffects', i)">✕</button>
                   </div>
                 </div>
               </div>
-              <div v-if="!form.effects.length && !form.keywordEffects.length" class="empty-hint">No effects yet.</div>
+              <div v-if="!form.effects.length && !form.keywordEffects.length" class="empty-hint">Sin efectos aun.</div>
             </div>
 
             <!-- Inherit Effects -->
             <div class="form-field full">
               <div class="effect-section-header">
-                <label>Inherit Effects</label>
-                <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('inheritEffects')">+ Add effect</button>
-                <button type="button" class="btn-ghost btn-xs" @click="openKeywordEffectModal('inheritKeywordEffects')">+ Add keyword effect</button>
+                <label>Efectos heredados</label>
+                <div class="effect-btn-group">
+                  <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('inheritEffects')">+ Añadir efecto</button>
+                  <button type="button" class="btn-ghost btn-xs" @click="openKeywordEffectModal('inheritKeywordEffects')">+ Añadir efecto keyword</button>
+                </div>
               </div>
               <div v-if="form.inheritEffects.length" class="effect-list">
                 <div v-for="(ef, i) in form.inheritEffects" :key="i" class="effect-list-item">
                   <span class="effect-preview" v-html="renderEffectHtml(ef)"></span>
                   <div class="effect-item-actions">
-                    <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('inheritEffects', i)">Edit</button>
+                    <button type="button" class="btn-ghost btn-xs" @click="openEffectModal('inheritEffects', i)">Editar</button>
                     <button type="button" class="btn-ghost btn-xs btn-danger" @click="removeEffect('inheritEffects', i)">✕</button>
                   </div>
                 </div>
@@ -938,20 +1182,20 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                   </div>
                 </div>
               </div>
-              <div v-if="!form.inheritEffects.length && !form.inheritKeywordEffects.length" class="empty-hint">No inherit effects yet.</div>
+              <div v-if="!form.inheritEffects.length && !form.inheritKeywordEffects.length" class="empty-hint">Sin efectos heredados aun.</div>
             </div>
           </div>
 
           <div class="form-actions">
-            <button class="btn-filled" @click="saveCard" :disabled="saving">{{ saving ? 'Saving…' : 'Save Card' }}</button>
-            <button class="btn-ghost" @click="showCardForm = false">Cancel</button>
+            <button class="btn-filled" @click="saveCard" :disabled="saving">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+            <button class="btn-ghost" @click="showCardForm = false">Cancelar</button>
           </div>
           </div><!-- /form-main -->
 
           <div v-if="driveCardPreview || previewLoading" class="form-preview-panel">
-            <div v-if="previewLoading" class="preview-loading">Looking up…</div>
+            <div v-if="previewLoading" class="preview-loading">Cargando…</div>
             <img v-else-if="driveCardPreview" :src="driveCardPreview" class="preview-img" alt="Card preview" />
-            <p v-else class="preview-not-found">No image found</p>
+            <p v-else class="preview-not-found">No se encontraro imagenes</p>
           </div>
           </div><!-- /form-with-preview -->
         </div>
@@ -966,8 +1210,8 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
         <div class="modal-box modal-box--effect">
           <button class="modal-close" @click="showEffectModal = false">✕</button>
           <h3 class="modal-form-title">
-            {{ editingEffectIdx !== null ? 'Edit' : 'Add' }} Effect
-            <span class="subtitle">— {{ effectTarget === 'effects' ? 'Effect' : 'Inherit Effect' }}</span>
+            {{ editingEffectIdx !== null ? 'Editar' : 'Añadir' }} efecto
+            <span class="subtitle">— {{ effectTarget === 'effects' ? 'Efecto' : 'Efecto heredado' }}</span>
           </h3>
 
           <div class="form-with-preview">
@@ -975,27 +1219,26 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <div class="form-grid">
             <!-- Instance -->
             <div class="form-field">
-              <label>Instance</label>
+              <label>Instancia</label>
               <select v-model="effectForm.instance">
-                <option :value="null">— none —</option>
+                <option :value="null">— ninguna —</option>
                 <option v-for="inst in refData.instances" :key="inst" :value="inst">{{ inst }}</option>
               </select>
             </div>
 
             <!-- Usage limit -->
             <div class="form-field">
-              <label>Usage Limit</label>
+              <label>Limite de uso</label>
               <select v-model="effectForm.ussageLimit">
-                <option :value="null">— none —</option>
+                <option :value="null">— ninguno —</option>
                 <option v-for="u in USAGE_LIMITS" :key="u" :value="u">{{ u }}</option>
               </select>
             </div>
 
             <!-- Kind -->
             <div class="form-field">
-              <label>Kind</label>
+              <label>Naturaleza *</label>
               <select v-model="effectForm.kind">
-                <option :value="null">— none —</option>
                 <option v-for="k in refData.kinds" :key="k" :value="k">{{ k }}</option>
               </select>
             </div>
@@ -1013,16 +1256,16 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                 >{{ tag }}</button>
               </div>
               <div class="new-tag-row">
-                <input v-model="newTagInput" class="filter-input" placeholder="New tag…" @keydown.enter.prevent="submitNewTag" />
-                <button type="button" class="btn-ghost btn-xs" @click="submitNewTag">Add</button>
+                <input v-model="newTagInput" class="filter-input" placeholder="Nuevo tag…" @keydown.enter.prevent="submitNewTag" />
+                <button type="button" class="btn-ghost btn-xs" @click="submitNewTag">Añadir</button>
               </div>
             </div>
 
             <!-- Effect blocks -->
             <div class="form-field full">
               <div class="effect-section-header">
-                <label>Effect Blocks</label>
-                <button type="button" class="btn-ghost btn-xs" @click="addEffectBlock">+ Add block</button>
+                <label>Bloques de efecto</label>
+                <button type="button" class="btn-ghost btn-xs" @click="addEffectBlock">+ Añadir bloque</button>
               </div>
               <div v-for="(block, i) in effectForm.effectBlocks" :key="i" class="effect-block-editor">
                 <div class="effect-block-num">#{{ i + 1 }}
@@ -1030,18 +1273,18 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                     class="btn-ghost btn-xs btn-danger" @click="removeEffectBlock(i)">✕</button>
                 </div>
                 <div class="form-field">
-                  <label>Activation Condition</label>
-                  <input v-model="block.activationCondition" placeholder="When… / If…"
+                  <label>Condición de activación</label>
+                  <input v-model="block.activationCondition" placeholder="Cuando… / Si…"
                     @focus="trackBlockField(i, 'activationCondition', $event)" />
                 </div>
                 <div class="form-field">
-                  <label>Cost</label>
-                  <input v-model="block.cost" placeholder="Pay… / Tribute…"
+                  <label>Coste</label>
+                  <input v-model="block.cost" placeholder="Paga… / Tributa..."
                     @focus="trackBlockField(i, 'cost', $event)" />
                 </div>
                 <div class="form-field" style="grid-column: 1 / -1;">
-                  <label>Resolution *</label>
-                  <textarea v-model="block.resolution" rows="3" placeholder="Effect text…"
+                  <label>Resolución *</label>
+                  <textarea v-model="block.resolution" rows="3" placeholder="Texto del efecto…"
                     @focus="trackBlockField(i, 'resolution', $event)" />
                 </div>
 
@@ -1050,14 +1293,14 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                   <div class="block-kw-add">
                     <select v-model="blockKwPickers[i].keyword"
                       @change="blockKwPickers[i].number = null">
-                      <option :value="null">— insert keyword —</option>
+                      <option :value="null">— insertar keyword —</option>
                       <option v-for="k in Object.keys(refData.keywordEffects)" :key="k" :value="k">{{ k }}</option>
                     </select>
                     <input v-if="blockKwPlaceholder(i)" v-model="blockKwPickers[i].number"
                       :placeholder="`${blockKwPlaceholder(i)} value`" class="block-kw-num" />
                     <button type="button" class="btn-ghost btn-xs"
                       :disabled="!blockKwPickers[i]?.keyword"
-                      @click="insertKwToken(i)">Insert at cursor</button>
+                      @click="insertKwToken(i)">Insertar en cursor</button>
                   </div>
                 </div>
               </div>
@@ -1065,14 +1308,14 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
             <!-- Live preview -->
             <div class="form-field full">
-              <label>Preview</label>
+              <label>Vista previa</label>
               <div class="effect-preview-box" v-html="renderEffectHtml(effectForm)"></div>
             </div>
           </div>
 
           <div class="form-actions">
-            <button class="btn-filled" @click="saveEffect">{{ editingEffectIdx !== null ? 'Update' : 'Add' }} Effect</button>
-            <button class="btn-ghost" @click="showEffectModal = false">Cancel</button>
+            <button class="btn-filled" @click="saveEffect">{{ editingEffectIdx !== null ? 'Actualizar' : 'Añadir' }} Efecto</button>
+            <button class="btn-ghost" @click="showEffectModal = false">Cancelar</button>
           </div>
           </div><!-- /form-main -->
 
@@ -1096,8 +1339,8 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
         <div class="modal-box modal-box--effect">
           <button class="modal-close" @click="showKeywordEffectModal = false">✕</button>
           <h3 class="modal-form-title">
-            {{ editingEffectIdx !== null ? 'Edit' : 'Add' }} Effect
-            <span class="subtitle">— {{ effectTarget === 'effects' ? 'Effect' : 'Inherit Effect' }}</span>
+            {{ editingEffectIdx !== null ? 'Editar' : 'Añadir' }} efecto
+            <span class="subtitle">— {{ effectTarget === 'effects' ? 'Efecto' : 'Efecto heredado' }}</span>
           </h3>
 
           <div class="form-with-preview">
@@ -1116,7 +1359,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
             <div v-if="keywordPlaceholder" class="form-field">
               <label>{{ keywordPlaceholder }}</label>
-              <input v-model="keywordEffectForm.number" :placeholder="`Value for {${keywordPlaceholder}}`" />
+              <input v-model="keywordEffectForm.number" :placeholder="`Valor para {${keywordPlaceholder}}`" />
             </div>
             
           </div>
@@ -1124,7 +1367,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <div class="form-actions">
             <button class="btn-filled" @click="saveKeywordEffect"
               :disabled="!keywordEffectForm.keyword">
-              {{ editingKeywordEffectIdx !== null ? 'Update' : 'Add' }} Keyword Effect
+              {{ editingKeywordEffectIdx !== null ? 'Actualizar' : 'Añadir' }} efecto keyword
             </button>
           </div>
           </div><!-- /form-main -->
@@ -1157,19 +1400,12 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
 /* Filter column — toggle scrolls normally; sidebar sticks */
 .filter-col {
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.5rem;
 }
 
-/* Sticky wrapper — only the sidebar panel sticks, not the toggle */
-.filter-sidebar-sticky {
-  position: sticky;
-  top: 4.5rem;
-  align-self: flex-start;
-}
 
 /* Sidebar toggle button */
 .sidebar-toggle {
@@ -1186,10 +1422,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
   width: 0; overflow: clip;
   transition: width 0.25s ease;
 }
-.filter-sidebar--open { width: 20vw; min-width: 180px; max-width: 280px; }
+.filter-sidebar--open { width: 420px; }
 
 .filter-sidebar-inner {
-  width: 100%; box-sizing: border-box;
   background: #121314; border: 1px solid #2a2a2a; border-radius: 10px;
   padding: 0.9rem 1rem;
   display: flex; flex-direction: column; gap: 1rem;
@@ -1211,6 +1446,19 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 .filter-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .filter-chips--colors { flex-wrap: nowrap; }
 .chip--color { padding: 0.2rem 0.45rem; font-size: 0.72rem; flex: 1; text-align: center; }
+
+/* Color mode toggle (below color chips in filter) */
+.filter-mode-toggle { display: flex; gap: 0.25rem; margin-top: 0.35rem; }
+.mode-btn {
+  flex: 1; padding: 0.18rem 0.4rem; font-size: 0.68rem; border-radius: 4px;
+  border: 1px solid #3a3a3a; background: transparent;
+  color: #eeeeee; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.mode-btn.active { background: #3f51b5; color: #fff; border-color: #3f51b5; }
+
+/* Colors chips row in card form */
+.color-chips-row { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.field-hint { font-size: 0.7rem; opacity: 0.5; font-weight: 400; }
 
 input[type="range"] {
   -webkit-appearance: none;
@@ -1254,13 +1502,13 @@ input[type="range"]::-moz-range-thumb {
   border: none;
 }
 
-/* Chips — used in filter bar (always dark) and in form modals (theme-aware via CSS vars) */
+/* Chips — filter sidebar is always dark (#121314), use hardcoded light values */
 .chip {
   padding: 0.25rem 0.65rem; border-radius: 20px; border: 1px solid #3a3a3a;
-  background: transparent; color: rgba(255,255,255,0.5); font-size: 0.78rem; font-weight: 600;
+  background: transparent; color: rgba(255,255,255,0.65); font-size: 0.78rem; font-weight: 600;
   cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.chip:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.chip:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.95); }
 .chip.active { background: #3f51b5; border-color: #3f51b5; color: #fff; }
 .chip.color-b.active { background: #1565c0; border-color: #1565c0; }
 .chip.color-g.active { background: #2e7d32; border-color: #2e7d32; }
@@ -1328,7 +1576,7 @@ input[type="range"]::-moz-range-thumb {
 .card-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
 .card-item:hover .card-img { transform: scale(1.04); }
 .card-label { display: flex; flex-direction: column; margin-top: 0.25rem; gap: 0.1rem; }
-.card-name      { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-name { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-meta-line { font-size: 0.68rem; color: var(--text-muted); }
 .no-meta-badge {
   position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.7);
@@ -1342,6 +1590,18 @@ input[type="range"]::-moz-range-thumb {
   display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;
 }
 .modal-overlay--nested { z-index: 1100; background: rgba(0,0,0,0.5); }
+.modal-nav {
+  position: fixed; top: 50%; transform: translateY(-50%);
+  z-index: 1001; background: rgba(0,0,0,0.45); border: none;
+  color: #fff; font-size: 2rem; width: 3rem; height: 5rem;
+  border-radius: 8px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: background 0.15s, opacity 0.15s;
+}
+.modal-nav:hover:not(:disabled) { background: rgba(0,0,0,0.75); }
+.modal-nav:disabled { opacity: 0.2; cursor: default; }
+.modal-nav--prev { left: 0.75rem; }
+.modal-nav--next { right: 0.75rem; }
 .modal-box {
   background: var(--card-bg); border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow); border-radius: 12px;
@@ -1396,7 +1656,11 @@ input[type="range"]::-moz-range-thumb {
 .modal-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .modal-info-col { flex: 1; min-width: 0; }
 .modal-top-row { margin-bottom: 0.75rem; }
-.modal-card-name { color: var(--text-primary); margin: 0 0 0.4rem; font-size: 1.5rem;}
+.modal-name-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+.modal-card-name { color: var(--text-primary); margin: 0; font-size: 1.5rem; }
+.btn-modal-edit-name { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 0; line-height: 1; }
+.btn-modal-edit-name:hover { color: var(--text-primary); }
+.modal-name-input { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); background: var(--input-bg); border: 1px solid #3f51b5; border-radius: 6px; padding: 0 0.4rem; outline: none; width: min(100%, 60%); }
 .modal-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 .badge-edition, .badge-color, .badge-sub, .badge-num {
   font-size: 1rem; font-weight: 700; padding: 0.15rem 0.5rem;
@@ -1433,7 +1697,7 @@ input[type="range"]::-moz-range-thumb {
 /* Form grid */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.65rem; }
 .form-field { display: flex; flex-direction: column; gap: 0.25rem; }
-.form-field.full { grid-column: 1 / -1; }
+.form-field.full, .form-field--full { grid-column: 1 / -1; }
 .form-field--inline { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 0.5rem; }
 .form-field label { font-size: 0.78rem; color: var(--text-secondary); }
 .form-field .hint  { font-size: 0.68rem; color: var(--text-muted); }
@@ -1454,17 +1718,26 @@ input[type="range"]::-moz-range-thumb {
 .form-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
 .form-error { color: var(--error-color); font-weight: 600; margin-bottom: 0.75rem; font-size: 0.88rem; }
 
-/* Classes / chips multi-select (inside modal — use card-border for chips) */
+/* Classes / chips multi-select (inside modal — use theme variables) */
 .chip-select { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.4rem 0; }
 .chip-select .chip {
-  border-color: var(--card-border);
-  color: var(--text-secondary);
+  border-color: var(--input-border);
+  color: var(--text-primary);
 }
 .chip-select .chip:hover { background: var(--input-bg); color: var(--text-primary); }
 .chip-select .chip.active { background: #3f51b5; border-color: #3f51b5; color: #fff; }
 
+/* Color chips row inside card form (also inside themed modal) */
+.color-chips-row .chip {
+  border-color: var(--input-border);
+  color: var(--text-primary);
+}
+.color-chips-row .chip:hover { background: var(--input-bg); }
+.color-chips-row .chip.active { color: #fff; }
+
 /* Effect list in card form */
 .effect-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; }
+.effect-btn-group { display: flex; gap: 0.4rem; }
 .effect-list { display: flex; flex-direction: column; gap: 0.35rem; }
 .effect-list-item {
   display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
@@ -1519,4 +1792,10 @@ input[type="range"]::-moz-range-thumb {
   .effect-block-editor { grid-template-columns: 1fr; }
   .filter-bar { gap: 0.75rem; }
 }
+
+/* ── Themed scrollbars for all modal boxes ───────────────────────────────── */
+.modal-box::-webkit-scrollbar { width: 6px; }
+.modal-box::-webkit-scrollbar-track { background: var(--card-bg); border-radius: 0 12px 12px 0; }
+.modal-box::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+.modal-box::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 </style>
