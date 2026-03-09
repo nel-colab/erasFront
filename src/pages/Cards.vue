@@ -6,6 +6,8 @@ import { useAuthStore } from '@/store/login'
 const auth = useAuthStore()
 const isAuth = computed(() => auth.isAuthenticated)
 
+const sidebarOpen = ref(true)
+
 // ── Constants (hardcoded by game rules) ───────────────────────────────────────
 const CARD_TYPES   = ['creature', 'utility', 'structure']
 const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
@@ -51,7 +53,6 @@ const fetchDriveCards = async () => {
   try {
     const p = new URLSearchParams()
     if (fEdition.value)          p.set('edition',    fEdition.value)
-    if (fColor.value)            p.set('color',      fColor.value)
     if (fSubEdition.value !== null) p.set('subEdition', fSubEdition.value)
     const { data } = await axios.get('/api/drive/cards/db?' + p)
     driveCards.value = data.sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
@@ -75,21 +76,30 @@ const fetchMeta = async () => {
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 const fEdition    = ref('')
-const fColor      = ref('')
+const fColors     = ref([])   // excluded colors; empty = show all
 const fSubEdition = ref(null)   // null = all, '' = MAIN, '1'/'2'/… = SUBn
 const fName       = ref('')
 const fType       = ref('')
 const fStarter    = ref(false)
 const showWithoutMeta = ref(true)
 const cardSize     = ref(200) // px, for responsive grid
-
+const fCostMin   = ref(0)
+const fCostMax   = ref(8)
+const fLevelMin   = ref(0)
+const fLevelMax   = ref(12)
+const fStrengthMin   = ref(0)
+const fStrengthMax   = ref(15)
+const fSpecialCostMin = ref(0)
+const fSpecialCostMax = ref(5)
+const fRequirement = ref('')
+const fCardNumber = ref('')
 
 const anyFilterActive = computed(() =>
-  !!(fEdition.value || fColor.value || fSubEdition.value !== null ||
-     fName.value || fType.value || fStarter.value))
+  !!(fEdition.value || fColors.value.length || fSubEdition.value !== null ||
+     fName.value || fType.value || fStarter.value || fRequirement.value))
 
 watch(anyFilterActive, v => { if (v) showWithoutMeta.value = false })
-watch([fEdition, fColor, fSubEdition], () => { fetchDriveCards(); fetchMeta() })
+watch([fEdition, fSubEdition], () => { fetchDriveCards(); fetchMeta() })
 
 const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize.value}px, 1fr))`
@@ -109,14 +119,18 @@ const allMerged  = computed(() =>
 const visibleCards = computed(() =>
   allMerged.value
     .filter(c => showWithoutMeta.value || c.meta !== null)
+    .filter(c => !fColors.value.length || !fColors.value.includes(c.color_identity))
     .filter(c => !fName.value    || c.name?.toLowerCase().includes(fName.value.toLowerCase()))
     .filter(c => !fType.value    || c.meta?.cardType === fType.value)
     .filter(c => !fStarter.value || c.meta?.starter === true)
+    .filter(c => {
+      const lv = c.meta?.level
+      if (lv == null) return true
+      return lv >= fLevelMin.value && lv <= fLevelMax.value
+    })
 )
 
 // ── Available filter options (dynamic) ───────────────────────────────────────
-const availableColors = computed(() =>
-  [...new Set(driveCards.value.map(c => c.color_identity).filter(Boolean))].sort())
 const availableSubs = computed(() => {
   const s = new Set(driveCards.value.map(c => c.sub_edition))
   return [...s].sort((a, b) => {
@@ -126,6 +140,9 @@ const availableSubs = computed(() => {
 })
 const availableTypes = computed(() =>
   [...new Set(metaCards.value.map(c => c.cardType).filter(Boolean))].sort())
+
+const availableSpecialSummons = computed(() =>
+  [...new Set(metaCards.value.map(c => c.specialSummonKind).filter(Boolean))].sort())
 
 const subLabel   = s => s === null || s === '' ? 'MAIN' : `SUB${s}`
 const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'White' }[c] ?? c)
@@ -349,25 +366,6 @@ const saveEffect = () => {
 }
 const removeEffect = (target, idx) => form.value[target].splice(idx, 1)
 
-// Mirror Java Effect.getPlainEffect()
-const effectSummary = ef => {
-  const parts = []
-  if (ef.instance)    parts.push(`<${ef.instance}>`)
-  if (ef.ussageLimit === 'once per turn')                parts.push('[once per turn]')
-  else if (ef.ussageLimit === 'once per turn between copies') parts.push('(1)')
-  else if (ef.ussageLimit === 'ultimate effect')         parts.push('[ultimate]')
-  const resolveTokens = (text) => text
-    ? text.replace(/\[\[([^\]:]+)(?::([^\]]*))?\]\]/g, (_, kw, val) => keywordEffectSummary({ keyword: kw, number: val || null }))
-    : text
-  ;(ef.effectBlocks ?? []).forEach(b => {
-    let s = ''
-    if (b.activationCondition) s += resolveTokens(b.activationCondition) + ': '
-    if (b.cost)                s += resolveTokens(b.cost) + '; '
-    if (b.resolution)          s += resolveTokens(b.resolution)
-    if (s.trim()) parts.push(s.trim())
-  })
-  return parts.join(' ') || 'empty effect'
-}
 
 // ── HTML rendering helpers ────────────────────────────────────────────────────────────
 const escapeHtml = (s) => s
@@ -377,7 +375,7 @@ const escapeHtml = (s) => s
 const getKwDescription = (kwKey) => {
   const ref = refData.value.keywordEffects?.[kwKey]
   if (!ref) return null
-  return effectSummary(ref)
+  return ref.displayText || null
 }
 
 const resolveTokensHtml = (text, collectedKws) => {
@@ -427,8 +425,8 @@ const renderCardKwEffect = (ke) => {
   const desc = getKwDescription(ke.keyword)
   let html = `<span class="kw-name">${escapeHtml(rendered)}</span>`
   if (desc) {
-    const descResolved = ke.displayText != null
-      ? desc.replace(/\{[^}]+\}/, ke.displayText)
+    const descResolved = ke.number != null
+      ? desc.replace(/\{[^}]+\}/g, ke.number)
       : desc
     html += ` <span class="kw-desc">(${escapeHtml(descResolved)})</span>`
   }
@@ -443,12 +441,7 @@ const editingKeywordEffectIdx  = ref(null)              // null = new
 const blankKeywordEffect = () => ({ keyword: null, number: null })
 const keywordEffectForm = ref(blankKeywordEffect())
 
-// Renders "Enfrentar {X}" + number 3 → "Enfrentar 3"
-const keywordEffectSummary = (ke) => {
-  if (!ke?.keyword) return ''
-  if (ke.number == null) return ke.keyword
-  return ke.keyword.replace(/\{[^}]+\}/, ke.number)
-}
+
 
 const saveKeywordEffect = () => {
   const copy = JSON.parse(JSON.stringify(keywordEffectForm.value))
@@ -490,101 +483,197 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 <template>
   <div class="cards-page">
 
-    <!-- ── Header ─────────────────────────────────────────────────────── -->
-    <div class="cp-header">
-      <h2>Cards</h2>
-      <button v-if="isAuth" class="btn-filled" @click="openCreate()">+ New Card</button>
-    </div>
 
-    <!-- ── Filter bar ─────────────────────────────────────────────────── -->
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label class="filter-label">Edition</label>
-        <select v-model="fEdition" class="filter-select">
-          <option value="">All</option>
-          <option v-for="ed in editions" :key="ed.editionId" :value="ed.editionId">
-            {{ ed.editionId }}{{ ed.editionName ? ' — ' + ed.editionName : '' }}
-          </option>
-        </select>
-      </div>
+    <!-- ── Body (sidebar + main) ──────────────────────────────────────── -->
+    <div class="cp-body">
 
-      <div v-if="availableColors.length" class="filter-group">
-        <label class="filter-label">Color</label>
-        <div class="filter-chips">
-          <button class="chip" :class="{ active: fColor === '' }" @click="fColor = ''">All</button>
-          <button v-for="c in availableColors" :key="c" class="chip"
-            :class="['color-' + c.toLowerCase(), { active: fColor === c }]"
-            @click="fColor = fColor === c ? '' : c">{{ colorLabel(c) }}</button>
+      <!-- ── Filter column (toggle + collapsible sidebar) ───────────── -->
+      <div class="filter-col">
+        <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen" :title="sidebarOpen ? 'Hide filters' : 'Show filters'">
+          <span class="sidebar-toggle-icon">&#9776;</span>
+        </button>
+
+      <div class="filter-sidebar-sticky">
+      <div class="filter-sidebar" :class="{ 'filter-sidebar--open': sidebarOpen }">
+        <div class="filter-sidebar-inner">
+
+          <!-- Nombre -->
+          <div class="filter-group">
+            <label class="filter-label">Nombre</label>
+            <input v-model="fName" class="filter-input" placeholder="Buscar por nombre…" />
+          </div>
+
+          <!-- Tipo -->
+          <div v-if="availableTypes.length" class="filter-group">
+            <label class="filter-label">Tipo de carta</label>
+            <select v-model="fType" class="filter-select">
+              <option value="">Todos</option>
+              <option v-for="t in availableTypes" :key="t" :value="t">{{ t }}</option>
+            </select>
+          </div>
+
+          <!-- Color -->
+          <div class="filter-group">
+            <label class="filter-label">Color</label>
+            <div class="filter-chips filter-chips--colors">
+              <button v-for="c in COLOR_IDENTITIES" :key="c" class="chip chip--color"
+                :class="['color-' + c.toLowerCase(), { active: !fColors.includes(c) }]"
+                @click="fColors = fColors.includes(c) ? fColors.filter(x => x !== c) : [...fColors, c]">{{ colorLabel(c) }}</button>
+            </div>
+          </div>
+
+          <!-- Clases -->
+          <div class="filter-group">
+            <label class="filter-label">Clases</label>
+            <select v-model="fClases" class="filter-select">
+              <option value="">Todas</option>
+              <option v-for="cl in classes" :key="cl" :value="cl">
+                {{ cl }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Coste -->
+          <div class="filter-group">
+            <label class="filter-label">
+              Coste<span v-if="fCostMax > 0 || fCostMax < 8"> ({{ fCostMin }}–{{ fCostMax }})</span><span v-else> (all)</span>
+            </label>
+            <div class="dual-range"
+              :style="{ '--pct-min': (fCostMin / 8 * 100) + '%', '--pct-max': (fCostMax / 8 * 100) + '%' }">
+              <div class="dual-range-track"></div>
+              <input type="range" min="0" max="8" step="1" v-model.number="fCostMin"
+                @input="fCostMax = fCostMin > fCostMax ? fCostMin : fCostMax" />
+              <input type="range" min="0" max="8" step="1" v-model.number="fCostMax"
+                @input="fCostMin = fCostMax < fCostMin ? fCostMax : fCostMin" />
+            </div>
+          </div>
+
+          <!-- Nivel -->
+          <div class="filter-group">
+            <label class="filter-label">
+              Nivel<span v-if="fLevelMin > 0 || fLevelMax < 6"> ({{ fLevelMin }}–{{ fLevelMax }})</span><span v-else> (Todos)</span>
+            </label>
+            <div class="dual-range"
+              :style="{ '--pct-min': (fLevelMin / 6 * 100) + '%', '--pct-max': (fLevelMax / 6 * 100) + '%' }">
+              <div class="dual-range-track"></div>
+              <input type="range" min="0" max="6" step="1" v-model.number="fLevelMin"
+                @input="fLevelMax = fLevelMin > fLevelMax ? fLevelMin : fLevelMax" />
+              <input type="range" min="0" max="6" step="1" v-model.number="fLevelMax"
+                @input="fLevelMin = fLevelMax < fLevelMin ? fLevelMax : fLevelMin" />
+            </div>
+          </div>
+
+          <!-- Fuerza -->
+          <div class="filter-group">
+            <label class="filter-label">
+              Fuerza<span v-if="fStrengthMax > 0 || fStrengthMax < 8"> ({{ fStrengthMin }}–{{ fStrengthMax }})</span><span v-else> (all)</span>
+            </label>
+            <div class="dual-range"
+              :style="{ '--pct-min': (fStrengthMin / 8 * 100) + '%', '--pct-max': (fStrengthMax / 8 * 100) + '%' }">
+              <div class="dual-range-track"></div>
+              <input type="range" min="0" max="8" step="1" v-model.number="fStrengthMin"
+                @input="fStrengthMax = fStrengthMin > fStrengthMax ? fStrengthMin : fStrengthMax" />
+              <input type="range" min="0" max="8" step="1" v-model.number="fStrengthMax"
+                @input="fStrengthMin = fStrengthMax < fStrengthMin ? fStrengthMax : fStrengthMin" />
+            </div>
+          </div>
+
+          <!-- Tipo de invocacion especial -->
+          <div v-if="availableSpecialSummons.length" class="filter-group">
+            <label class="filter-label">Invocacion especial</label>
+            <select v-model="fSpecialSummon" class="filter-select">
+              <option value="">Todos</option>
+              <option v-for="ss in availableSpecialSummons" :key="ss" :value="ss">{{ ss }}</option>
+            </select>
+          </div>
+
+          <!-- Coste especial -->
+          <div class="filter-group">
+            <label class="filter-label">
+              Coste especial<span v-if="fSpecialCostMax > 0 || fSpecialCostMax < 8"> ({{ fSpecialCostMin }}–{{ fSpecialCostMax }})</span><span v-else> (all)</span>
+            </label>
+            <div class="dual-range"
+              :style="{ '--pct-min': (fSpecialCostMin / 8 * 100) + '%', '--pct-max': (fSpecialCostMax / 8 * 100) + '%' }">
+              <div class="dual-range-track"></div>
+              <input type="range" min="0" max="8" step="1" v-model.number="fSpecialCostMin"
+                @input="fSpecialCostMax = fSpecialCostMin > fSpecialCostMax ? fSpecialCostMin : fSpecialCostMax" />
+              <input type="range" min="0" max="8" step="1" v-model.number="fSpecialCostMax"
+                @input="fSpecialCostMin = fSpecialCostMax < fSpecialCostMin ? fSpecialCostMax : fSpecialCostMin" />
+            </div>
+          </div>
+
+          <!-- Requerimineto -->
+          <div class="filter-group">
+            <label class="filter-label">Requerimiento</label>
+            <input v-model="fRequirement" class="filter-input" placeholder="Buscar por requerimiento…" />
+          </div>
+
+
+          <div class="filter-group">
+            <label class="filter-label">Edition</label>
+            <select v-model="fEdition" class="filter-select">
+              <option value="">Todas</option>
+              <option v-for="ed in editions" :key="ed.editionId" :value="ed.editionId">
+                {{ ed.editionId }}{{ ed.editionName ? ' — ' + ed.editionName : '' }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Número de carta -->
+          <div class="filter-group">
+            <label class="filter-label">Número de carta</label>
+            <input v-model="fCardNumber" class="filter-input" placeholder="Buscar por número de carta…" />
+          </div>
+
+          <div v-if="availableSubs.length > 1" class="filter-group">
+            <label class="filter-label">Sub-edition</label>
+            <div class="filter-chips">
+              <button class="chip" :class="{ active: fSubEdition === null }" @click="fSubEdition = null">All</button>
+              <button v-for="s in availableSubs" :key="s ?? 'main'" class="chip"
+                :class="{ active: fSubEdition === s }"
+                @click="fSubEdition = fSubEdition === s ? null : s">{{ subLabel(s) }}</button>
+            </div>
+          </div>
+
+          <div class="filter-group filter-group--row">
+            <input type="checkbox" v-model="fStarter" class="filter-check" />
+            <label class="filter-label">Starter</label>
+          </div>
+
+          <div class="filter-group filter-group--row">
+            <input type="checkbox" v-model="showWithoutMeta" :disabled="anyFilterActive" class="filter-check" />
+            <label class="filter-label" :class="{ muted: anyFilterActive }">NO METADATA</label>
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-label">Card Size ({{ cardSize }}px)</label>
+            <input class="filter-input" type="range" min="100" max="500" step="10" v-model="cardSize" />
+          </div>
+
         </div>
       </div>
+      </div> <!-- /filter-sidebar-sticky -->
+      </div> <!-- /filter-col -->
 
-      <div v-if="availableSubs.length > 1" class="filter-group">
-        <label class="filter-label">Sub-edition</label>
-        <div class="filter-chips">
-          <button class="chip" :class="{ active: fSubEdition === null }" @click="fSubEdition = null">All</button>
-          <button v-for="s in availableSubs" :key="s ?? 'main'" class="chip"
-            :class="{ active: fSubEdition === s }"
-            @click="fSubEdition = fSubEdition === s ? null : s">{{ subLabel(s) }}</button>
+      <!-- ── Main content ───────────────────────────────────────────── -->
+      <div class="cp-main">
+
+        <!-- ── Status / count ─────────────────────────────────────── -->
+        <div v-if="loadingDrive" class="cp-empty">Loading cards…</div>
+        <div v-else-if="visibleCards.length === 0" class="cp-empty">
+          No cards found{{ anyFilterActive ? ' for the current filters' : '' }}.
         </div>
-      </div>
+        <div v-if="visibleCards.length > 0" class="cp-count">
+          {{ visibleCards.length }} card{{ visibleCards.length !== 1 ? 's' : '' }}
+          <span v-if="anyFilterActive"> (filtered)</span>
+        </div>
 
-      <div v-if="availableTypes.length" class="filter-group">
-        <label class="filter-label">Type</label>
-        <select v-model="fType" class="filter-select">
-          <option value="">All</option>
-          <option v-for="t in availableTypes" :key="t" :value="t">{{ t }}</option>
-        </select>
-      </div>
-
-      <div class="filter-group filter-group--grow">
-        <label class="filter-label">Name</label>
-        <input v-model="fName" class="filter-input" placeholder="Search by name…" />
-      </div>
-
-      <div class="filter-group filter-group--center">
-        <label class="filter-label">Starter</label>
-        <input type="checkbox" v-model="fStarter" class="filter-check" />
-      </div>
-
-      <div class="filter-group filter-group--center">
-        <label class="filter-label" :class="{ muted: anyFilterActive }">No meta</label>
-        <input type="checkbox" v-model="showWithoutMeta" :disabled="anyFilterActive" class="filter-check" />
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label">
-          Card Size ({{ cardSize }}px)
-        </label>
-
-        <input
-          class="filter-input"
-          type="range"
-          min="100"
-          max="500"
-          step="10"
-          v-model="cardSize"
-        />
-      </div>
-
-    </div>
-
-
-    <!-- ── Status / count ─────────────────────────────────────────────── -->
-    <div v-if="loadingDrive" class="cp-empty">Loading cards…</div>
-    <div v-else-if="visibleCards.length === 0" class="cp-empty">
-      No cards found{{ anyFilterActive ? ' for the current filters' : '' }}.
-    </div>
-    <div v-if="visibleCards.length > 0" class="cp-count">
-      {{ visibleCards.length }} card{{ visibleCards.length !== 1 ? 's' : '' }}
-      <span v-if="anyFilterActive"> (filtered)</span>
-    </div>
-
-    <!-- ── Card grid ───────────────────────────────────────────────────── -->
-    <div
-      v-if="!loadingDrive && visibleCards.length > 0"
-      class="card-grid"
-      :style="gridStyle"
-    >
+        <!-- ── Card grid ───────────────────────────────────────────── -->
+        <div
+          v-if="!loadingDrive && visibleCards.length > 0"
+          class="card-grid"
+          :style="gridStyle"
+        >
       <div
         v-for="card in visibleCards"
         :key="card.id"
@@ -593,7 +682,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
       >
         <div class="card-frame">
           <img :src="card.image_url" :alt="card.name" class="card-img" loading="lazy" />
-          <div v-if="!card.meta" class="no-meta-badge">NO META</div>
+          <div v-if="!card.meta" class="no-meta-badge">NO METADATA</div>
         </div>
 
         <div class="card-label">
@@ -602,79 +691,94 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
       </div>
     </div>
 
+      </div> <!-- /cp-main -->
+    </div> <!-- /cp-body -->
+
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <!-- Detail modal                                                       -->
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <Teleport to="body">
       <div v-if="showDetail" class="modal-overlay" @click.self="closeDetail">
         <div class="modal-box">
-          <button class="modal-close" @click="closeDetail">✕</button>
+            <h1 class="modal-card-name">{{ detailCard.name }}</h1>
+            <button class="modal-close" @click="closeDetail">✕</button>
+            <div class="form-with-preview">
+              
 
-          <div class="modal-content">
-            <div class="modal-img-col">
-              <div class="modal-frame">
-                <img :src="detailCard.image_url" :alt="detailCard.name" class="modal-img" />
-              </div>
-            </div>
+              <div class="form-main">
 
-            <div class="modal-info-col">
-              <div class="modal-top-row">
-                <h3 class="modal-card-name">{{ detailCard.name }}</h3>
-                <div class="modal-badges">
-                  <span class="badge-edition">{{ detailCard.edition }}</span>
-                  <span class="badge-color">{{ colorLabel(detailCard.color_identity) }}</span>
-                  <span v-if="detailCard.sub_edition" class="badge-sub">{{ subLabel(detailCard.sub_edition) }}</span>
-                  <span class="badge-num">#{{ detailCard.number }}</span>
+              
+                <div class="modal-info-col">
+                  <div class="modal-top-row">
+                    
+                    <div class="modal-badges">
+                      <span class="badge-edition">{{ detailCard.edition }}</span>
+                      <span v-if="detailCard.sub_edition" class="badge-sub">{{ subLabel(detailCard.sub_edition) }}</span>
+                      <span class="badge-num">#{{ detailCard.number }}</span>
+                      <span class="badge-color" :class="'badge-color--' + (detailCard.color_identity || '').toLowerCase()">{{ colorLabel(detailCard.color_identity) }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="!detailCard.meta" class="no-meta-notice">
+                    No metadata yet.
+                    <button v-if="isAuth" class="btn-filled btn-sm" @click="openCreate(detailCard)">Create</button>
+                  </div>
+
+                  <template v-if="detailCard.meta">
+                    <div class="meta-grid-badges">
+                      <div class="meta-row" v-if="detailCard.meta.cardType"><span class="meta-k">Type</span><span class="meta-v">{{ detailCard.meta.cardType }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.cost != null"><span class="meta-k">Cost</span><span class="meta-v">{{ detailCard.meta.cost }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.strength != null"><span class="meta-k">Strength</span><span class="meta-v">{{ detailCard.meta.strength }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.level != null"><span class="meta-k">Level</span><span class="meta-v">{{ detailCard.meta.level }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.starter != null"><span class="meta-k">Starter</span><span class="meta-v">{{ detailCard.meta.starter ? 'Yes' : 'No' }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.cardClasses?.length"><span class="meta-k">Classes</span><span class="meta-v">{{ detailCard.meta.cardClasses.join(', ') }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.regulation"><span class="meta-k">Regulation</span><span class="meta-v">{{ detailCard.meta.regulation }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.specialCost != null"><span class="meta-k">Special Cost</span><span class="meta-v">{{ detailCard.meta.specialCost }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">SS Kind</span><span class="meta-v">{{ detailCard.meta.specialSummonKind }}</span></div>
+                      <div class="meta-row meta-row--full" v-if="detailCard.meta.requirement"><span class="meta-k">Requirement</span><span class="meta-v">{{ detailCard.meta.requirement }}</span></div>
+                    </div>
+
+                    <div v-if="detailCard.meta.effects?.length || detailCard.meta.keywordEffects?.length" class="effects-section">
+                      <div class="effects-label">Effects</div>
+                      <div v-for="(ef, i) in detailCard.meta.effects" :key="i" class="effect-pill">
+                        <span v-html="renderEffectHtml(ef)"></span>
+                        <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
+                      </div>
+                      <div v-for="(ke, i) in detailCard.meta.keywordEffects" :key="'kw'+i" class="effect-pill kw-pill">
+                        <span v-html="renderCardKwEffect(ke)"></span>
+                      </div>
+                    </div>
+
+                    <div v-if="detailCard.meta.inheritEffects?.length || detailCard.meta.inheritKeywordEffects?.length" class="effects-section">
+                      <div class="effects-label">Inherit Effects</div>
+                      <div v-for="(ef, i) in detailCard.meta.inheritEffects" :key="i" class="effect-pill">
+                        <span v-html="renderEffectHtml(ef)"></span>
+                        <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
+                      </div>
+                      <div v-for="(ke, i) in detailCard.meta.inheritKeywordEffects" :key="'ikw'+i" class="effect-pill kw-pill">
+                        <span v-html="renderCardKwEffect(ke)"></span>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div class="modal-actions" v-if="isAuth && detailCard.meta">
+                    <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Edit metadata</button>
+                  </div>
+                </div>
+
+              
+              </div><!-- /form-main -->
+
+            
+              <div class="modal-img-col">
+                <div class="modal-frame">
+                  <img :src="detailCard.image_url" :alt="detailCard.name" class="modal-img" />
                 </div>
               </div>
 
-              <div v-if="!detailCard.meta" class="no-meta-notice">
-                No metadata yet.
-                <button v-if="isAuth" class="btn-filled btn-sm" @click="openCreate(detailCard)">Create</button>
-              </div>
 
-              <template v-if="detailCard.meta">
-                <div class="meta-grid">
-                  <div class="meta-row" v-if="detailCard.meta.cardType"><span class="meta-k">Type</span><span class="meta-v">{{ detailCard.meta.cardType }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.cost != null"><span class="meta-k">Cost</span><span class="meta-v">{{ detailCard.meta.cost }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.strength != null"><span class="meta-k">Strength</span><span class="meta-v">{{ detailCard.meta.strength }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.level != null"><span class="meta-k">Level</span><span class="meta-v">{{ detailCard.meta.level }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.starter != null"><span class="meta-k">Starter</span><span class="meta-v">{{ detailCard.meta.starter ? 'Yes' : 'No' }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.cardClasses?.length"><span class="meta-k">Classes</span><span class="meta-v">{{ detailCard.meta.cardClasses.join(', ') }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.regulation"><span class="meta-k">Regulation</span><span class="meta-v">{{ detailCard.meta.regulation }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.specialCost != null"><span class="meta-k">Special Cost</span><span class="meta-v">{{ detailCard.meta.specialCost }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">SS Kind</span><span class="meta-v">{{ detailCard.meta.specialSummonKind }}</span></div>
-                  <div class="meta-row" v-if="detailCard.meta.requirement"><span class="meta-k">Requirement</span><span class="meta-v">{{ detailCard.meta.requirement }}</span></div>
-                </div>
 
-                <div v-if="detailCard.meta.effects?.length || detailCard.meta.keywordEffects?.length" class="effects-section">
-                  <div class="effects-label">Effects</div>
-                  <div v-for="(ef, i) in detailCard.meta.effects" :key="i" class="effect-pill">
-                    <span v-html="renderEffectHtml(ef)"></span>
-                    <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
-                  </div>
-                  <div v-for="(ke, i) in detailCard.meta.keywordEffects" :key="'kw'+i" class="effect-pill kw-pill">
-                    <span v-html="renderCardKwEffect(ke)"></span>
-                  </div>
-                </div>
-
-                <div v-if="detailCard.meta.inheritEffects?.length || detailCard.meta.inheritKeywordEffects?.length" class="effects-section">
-                  <div class="effects-label">Inherit Effects</div>
-                  <div v-for="(ef, i) in detailCard.meta.inheritEffects" :key="i" class="effect-pill">
-                    <span v-html="renderEffectHtml(ef)"></span>
-                    <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
-                  </div>
-                  <div v-for="(ke, i) in detailCard.meta.inheritKeywordEffects" :key="'ikw'+i" class="effect-pill kw-pill">
-                    <span v-html="renderCardKwEffect(ke)"></span>
-                  </div>
-                </div>
-              </template>
-
-              <div class="modal-actions" v-if="isAuth && detailCard.meta">
-                <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Edit metadata</button>
-              </div>
-            </div>
-          </div>
+            </div><!-- /form-with-preview -->
         </div>
       </div>
     </Teleport>
@@ -1041,29 +1145,72 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 .cards-page { padding: 1.5rem 1rem; }
 
 /* Header */
-.cp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+.cp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
 .cp-header h2 { color: var(--text-primary); margin: 0; }
 
-/* Filter bar — always dark, matches navbar */
-.filter-bar {
-  display: flex; flex-wrap: wrap; gap: 1rem;
-  background: #121314; border: 1px solid #2a2a2a; border-radius: 10px;
-  padding: 0.9rem 1rem; margin-bottom: 1.25rem; align-items: flex-end;
+/* Body layout */
+.cp-body { display: flex; gap: 1rem; align-items: stretch; }
+.cp-main { flex: 1; min-width: 0; }
+
+/* Filter column — toggle scrolls normally; sidebar sticks */
+.filter-col {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
 }
+
+/* Sticky wrapper — only the sidebar panel sticks, not the toggle */
+.filter-sidebar-sticky {
+  position: sticky;
+  top: 4.5rem;
+  align-self: flex-start;
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle {
+  background: var(--card-border); border: 1px solid var(--input-border); border-radius: 6px;
+  color: var(--text-secondary); width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background 0.15s; flex-shrink: 0;
+}
+.sidebar-toggle:hover { background: var(--input-border); }
+.sidebar-toggle-icon { font-size: 1rem; line-height: 1; }
+
+/* Filter sidebar — ↓ change this one value to resize */
+.filter-sidebar {
+  width: 0; overflow: clip;
+  transition: width 0.25s ease;
+}
+.filter-sidebar--open { width: 20vw; min-width: 180px; max-width: 280px; }
+
+.filter-sidebar-inner {
+  width: 100%; box-sizing: border-box;
+  background: #121314; border: 1px solid #2a2a2a; border-radius: 10px;
+  padding: 0.9rem 1rem;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+
 .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.filter-group--row { flex-direction: row; align-items: center; gap: 0.5rem; }
 .filter-group--grow { flex: 1 1 140px; }
-.filter-group--center { align-items: center; }
 .filter-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.5); font-weight: 600; }
 .filter-label.muted { opacity: 0.3; }
 .filter-select, .filter-input {
   background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 6px;
-  color: #e0e0e0; padding: 0.38rem 0.6rem; font-size: 0.88rem; outline: none; min-width: 120px;
+  color: #e0e0e0; padding: 0.38rem 0.6rem; font-size: 0.88rem; outline: none; min-width: 0; width: 100%; box-sizing: border-box;
 }
 .filter-select:focus, .filter-input:focus { border-color: #3f51b5; }
 .filter-select option { background: #1e1e1e; }
 .filter-input::placeholder { color: rgba(255,255,255,0.3); }
 .filter-check { width: 16px; height: 16px; cursor: pointer; accent-color: #3f51b5; }
 .filter-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.filter-chips--colors { flex-wrap: nowrap; }
+.chip--color { padding: 0.2rem 0.45rem; font-size: 0.72rem; flex: 1; text-align: center; }
 
 input[type="range"] {
   -webkit-appearance: none;
@@ -1118,8 +1265,52 @@ input[type="range"]::-moz-range-thumb {
 .chip.color-b.active { background: #1565c0; border-color: #1565c0; }
 .chip.color-g.active { background: #2e7d32; border-color: #2e7d32; }
 .chip.color-r.active { background: #c62828; border-color: #c62828; }
-.chip.color-w.active { background: #888;    border-color: #888;    color: #111; }
+.chip.color-w.active { background: #d8d8d8;    border-color: #d8d8d8;    color: #111; }
 .chip.color-n.active { background: #555;    border-color: #555; }
+
+/* Dual-handle range slider */
+.dual-range {
+  position: relative;
+  height: 20px;
+  width: 100%;
+}
+.dual-range-track {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  left: 0; right: 0; height: 4px;
+  border-radius: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    #555 var(--pct-min),
+    #3f51b5 var(--pct-min),
+    #3f51b5 var(--pct-max),
+    #555 var(--pct-max)
+  );
+}
+.dual-range input[type="range"] {
+  position: absolute;
+  width: 100%; top: 0; left: 0;
+  margin: 0; padding: 0;
+  background: transparent; border: none;
+  -webkit-appearance: none; appearance: none;
+  pointer-events: none;
+  height: 20px;
+}
+.dual-range input[type="range"]::-webkit-slider-runnable-track { background: transparent; height: 4px; }
+.dual-range input[type="range"]::-moz-range-track           { background: transparent; height: 4px; }
+.dual-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: all; cursor: pointer;
+  height: 14px; width: 14px;
+  background: #ccc; border-radius: 50%;
+  margin-top: -5px;
+}
+.dual-range input[type="range"]::-moz-range-thumb {
+  pointer-events: all; cursor: pointer;
+  height: 14px; width: 14px;
+  background: #ccc; border-radius: 50%; border: none;
+}
 
 /* Status */
 .cp-empty { text-align: center; color: var(--text-muted); padding: 3rem 1rem; font-size: 1rem; }
@@ -1154,11 +1345,12 @@ input[type="range"]::-moz-range-thumb {
 .modal-box {
   background: var(--card-bg); border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow); border-radius: 12px;
-  width: 100%; max-width: 860px; max-height: 90vh; overflow-y: auto;
+  width: 100%; max-width: 1440px; max-height: 90vh; overflow-y: auto;
   padding: 1.5rem; position: relative;
   transition: background-color 0.2s ease;
+  margin-top: 4rem;
 }
-.modal-box--form        { max-width: 740px; margin-top: 4rem;}
+.modal-box--form        { max-width: 1110px; margin-top: 4rem;}
 .modal-box--form-wide   { max-width: 1480px; margin-top: 4rem;}
 .modal-box--effect      { max-width: 1480px; margin-top: 4rem;}
 
@@ -1171,7 +1363,7 @@ input[type="range"]::-moz-range-thumb {
 
 .form-preview-panel {
   flex-shrink: 0;
-  width: 592px;
+  width: 35%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1179,7 +1371,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .preview-img {
   width: 100%;
-  border-radius: 10px;
+  border-radius: 2%;
   box-shadow: var(--card-shadow);
   display: block;
 }
@@ -1199,41 +1391,47 @@ input[type="range"]::-moz-range-thumb {
 
 /* Detail modal layout */
 .modal-content { display: flex; gap: 1.5rem; align-items: flex-start;}
-.modal-img-col { flex-shrink: 1; max-width: 50%; }
+.modal-img-col { flex-shrink: 0; width: 35%; }
 .modal-frame { width: 100%; aspect-ratio: 63 / 88; overflow: hidden; border-radius: 8px; background: var(--input-bg);  }
 .modal-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .modal-info-col { flex: 1; min-width: 0; }
 .modal-top-row { margin-bottom: 0.75rem; }
-.modal-card-name { color: var(--text-primary); margin: 0 0 0.4rem; font-size: 1.25rem; }
+.modal-card-name { color: var(--text-primary); margin: 0 0 0.4rem; font-size: 1.5rem;}
 .modal-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 .badge-edition, .badge-color, .badge-sub, .badge-num {
-  font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.5rem;
-  border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: 1rem; font-weight: 700; padding: 0.15rem 0.5rem;
+  border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; 
 }
-.badge-edition { background: #3f51b5; color: #fff; }
-.badge-color   { background: var(--input-bg); color: var(--text-secondary); border: 1px solid var(--card-border); }
-.badge-sub     { background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--card-border); }
-.badge-num     { background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--card-border); }
+.badge-edition { background: #2a2a2a; color: var(--text-muted); }
+.badge-color   { background: #2a2a2a; color: var(--text-muted); border: 1px solid var(--card-border); }
+.badge-color--b { background: #3b82f6; color: #fff; border: none; }
+.badge-color--g { background: #22c55e; color: #fff; border: none; }
+.badge-color--p { background: #a855f7; color: #fff; border: none; }
+.badge-color--r { background: #ef4444; color: #fff; border: none; }
+.badge-color--w { background: #ffffff; color: #1a1a1a; border: 1px solid #ccc; }
+.badge-sub     { background: #2a2a2a; color: var(--text-muted); border: 1px solid var(--card-border); }
+.badge-num     { background: #2a2a2a; color: var(--text-muted); border: 1px solid var(--card-border); }
 .no-meta-notice {
   color: var(--error-color); font-size: 0.85rem; background: rgba(244,67,54,0.08);
   border: 1px solid rgba(244,67,54,0.25); border-radius: 6px;
   padding: 0.6rem 0.8rem; margin-bottom: 0.75rem;
   display: flex; align-items: center; gap: 0.75rem;
 }
-.meta-grid { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; }
-.meta-row { display: flex; gap: 0.5rem; font-size: 0.85rem; }
-.meta-k   { color: var(--text-muted); min-width: 90px; font-weight: 600; }
-.meta-v   { color: var(--text-primary); }
-.effects-section  { margin-bottom: 0.75rem; }
-.effects-label    { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 700; margin-bottom: 0.3rem; }
-.effect-pill      { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 0.25rem; }
+.meta-grid-badges { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem; }
+.meta-row { background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.45rem 0.65rem; display: flex; flex-direction: column; gap: 0.1rem; }
+.meta-row--full { grid-column: 1 / -1; }
+.meta-k   { color: var(--text-muted); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.meta-v   { color: var(--text-primary); font-size: 1rem; font-weight: 700; }
+.effects-section  { margin-bottom: 0.75rem; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.75rem 0.9rem; }
+.effects-label    { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; margin-bottom: 0.5rem; }
+.effect-pill      { font-size: 0.75rem; color: var(--text-primary); line-height: 1.45; margin-bottom: 0.25rem; }
 .kw-pill          { color: #7c8ce8; font-weight: 600; }
 .kw-preview       { color: #7c8ce8; font-weight: 600; }
 .effect-tags      { font-size: 0.72rem; color: var(--text-muted); margin-left: 0.4rem; }
 .modal-actions    { margin-top: 1rem; display: flex; gap: 0.5rem; }
 
 /* Form grid */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.65rem; }
 .form-field { display: flex; flex-direction: column; gap: 0.25rem; }
 .form-field.full { grid-column: 1 / -1; }
 .form-field--inline { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 0.5rem; }
