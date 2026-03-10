@@ -11,6 +11,8 @@ const username = ref('')
 const password = ref('')
 const localError = ref('')
 
+auth.error = null
+
 const login = async () => {
   localError.value = ''
 
@@ -24,6 +26,8 @@ const login = async () => {
   if (ok) {
     const redirect = route.query.redirect || '/'
     router.replace(redirect)
+  } else {
+    localError.value = 'Credenciales inválidas.'
   }
 }
 

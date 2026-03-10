@@ -1,7 +1,7 @@
 server {
     server_name staging.erastcg.com;
 
-    location /api/cards/ {
+    location /api/cards {
         proxy_pass         http://localhost:8091;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -10,7 +10,7 @@ server {
         proxy_set_header   X-Forwarded-Proto $scheme;
     }
 
-    location /api/drive/ {
+    location /api/drive {
         proxy_pass         http://localhost:8091;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -19,7 +19,7 @@ server {
         proxy_set_header   X-Forwarded-Proto $scheme;
     }
 
-    location /api/auth/ {
+    location /api/auth {
         proxy_pass         http://localhost:8090;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -28,7 +28,7 @@ server {
         proxy_set_header   X-Forwarded-Proto $scheme;
     }
 
-    location /api/users/ {
+    location /api/users {
         proxy_pass         http://localhost:8090;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -37,7 +37,7 @@ server {
         proxy_set_header   X-Forwarded-Proto $scheme;
     }
 
-    location /api/roles/ {
+    location /api/roles {
         proxy_pass         http://localhost:8090;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -46,7 +46,7 @@ server {
         proxy_set_header   X-Forwarded-Proto $scheme;
     }
 
-    location /api/permissions/ {
+    location /api/permissions {
         proxy_pass         http://localhost:8090;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;

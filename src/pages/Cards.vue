@@ -11,9 +11,12 @@ const sidebarOpen = ref(true)
 
 // ── Constants (hardcoded by game rules) ───────────────────────────────────────
 const CARD_TYPES   = ['creature', 'utility', 'structure']
+const CARD_TYPE_ES = { creature: 'Criatura', utility: 'Utilitaria', structure: 'Estructura' }
 const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
 const SS_KINDS     = ['materialization', 'promotion', 'ritual', 'evolution']
+const SS_KIND_ES   = { materialization: 'Materialización', promotion: 'Ascenso', ritual: 'Ritual', evolution: 'Evolución' }
 const USAGE_LIMITS = ['once per turn', 'once per turn between copies', 'ultimate effect']
+const USAGE_LIMIT_ES = { 'once per turn': 'una vez por turno', 'once per turn between copies': 'una vez por turno entre copias', 'ultimate effect': 'efecto definitivo' }
 const RARITIES = ['C', 'UC', 'R', 'SR', 'SEC']
 const COST_MAX          = 8
 const LEVEL_MAX         = 12
@@ -105,6 +108,30 @@ const fRarity         = ref([])
 const fClases         = ref([])
 const fKeywordEffects = ref([])
 const fEffectTags     = ref([])
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+const sortKey = ref('number')   // 'number' | 'name' | 'cost' | 'level' | 'strength'
+const sortDir = ref('asc')      // 'asc' | 'desc'
+
+const SORT_OPTIONS = [
+  { value: 'number',   label: 'Número' },
+  { value: 'name',     label: 'Nombre' },
+  { value: 'cost',     label: 'Coste' },
+  { value: 'level',    label: 'Nivel' },
+  { value: 'strength', label: 'Fuerza' },
+]
+
+function sortVal(c) {
+  switch (sortKey.value) {
+    case 'name':     return (c.name ?? '').toLowerCase()
+    case 'cost':     return c.meta?.cost     ?? Infinity
+    case 'level':    return c.meta?.level    ?? Infinity
+    case 'strength': return c.meta?.strength ?? Infinity
+    default:         return c.number         ?? Infinity
+  }
+}
+
+const toggleSortDir = () => { sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc' }
 
 const anyFilterActive = computed(() =>
   !!(fEdition.value || fColors.value.length < COLOR_IDENTITIES.length ||
@@ -232,6 +259,12 @@ const visibleCards = computed(() => {
       if (!fEffectTags.value.length) return true
       const effList = [...(c.meta?.effects ?? []), ...(c.meta?.inheritEffects ?? [])]
       return effList.some(eff => eff.tags?.some(t => fEffectTags.value.includes(t)))
+    })
+    .sort((a, b) => {
+      const va = sortVal(a), vb = sortVal(b)
+      if (va === vb) return 0
+      const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb
+      return sortDir.value === 'asc' ? cmp : -cmp
     })
 })
 
@@ -528,9 +561,9 @@ const resolveTokensHtml = (text, collectedKws) => {
 const renderEffectHtml = (ef) => {
   const parts = []
   if (ef.instance) parts.push(escapeHtml(`<${ef.instance}>`))
-  if (ef.ussageLimit === 'once per turn') parts.push('[once per turn]')
+  if (ef.ussageLimit === 'once per turn') parts.push('[Una vez por turno]')
   else if (ef.ussageLimit === 'once per turn between copies') parts.push('(1)')
-  else if (ef.ussageLimit === 'ultimate effect') parts.push('[ultimate]')
+  else if (ef.ussageLimit === 'ultimate effect') parts.push('[Efecto definitivo]')
   ;(ef.effectBlocks ?? []).forEach(b => {
     const blockKws = []
     let s = ''
@@ -658,6 +691,19 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
       <div class="filter-sidebar" :class="{ 'filter-sidebar--open': sidebarOpen }">
         <div class="filter-sidebar-inner">
 
+          <!-- Ordenar -->
+          <div class="filter-group">
+            <label class="filter-label">Ordenar por</label>
+            <div class="sort-row">
+              <select v-model="sortKey" class="filter-select sort-select">
+                <option v-for="o in SORT_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+              <button class="btn-sort-dir" @click="toggleSortDir" :title="sortDir === 'asc' ? 'Ascendente' : 'Descendente'">
+                <i :class="sortDir === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down'"></i>
+              </button>
+            </div>
+          </div>
+
           <!-- Nombre -->
           <div class="filter-group">
             <label class="filter-label">Nombre</label>
@@ -669,7 +715,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <label class="filter-label">Tipo de carta</label>
             <select v-model="fType" class="filter-select">
               <option value="">Todos</option>
-              <option v-for="t in availableTypes" :key="t" :value="t">{{ t }}</option>
+              <option v-for="t in availableTypes" :key="t" :value="t">{{ CARD_TYPE_ES[t] ?? t }}</option>
             </select>
           </div>
 
@@ -747,7 +793,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <label class="filter-label">Invocacion especial</label>
             <select v-model="fSpecialSummon" class="filter-select">
               <option value="">Todos</option>
-              <option v-for="ss in availableSpecialSummons" :key="ss" :value="ss">{{ ss }}</option>
+              <option v-for="ss in availableSpecialSummons" :key="ss" :value="ss">{{ SS_KIND_ES[ss] ?? ss }}</option>
             </select>
           </div>
 
@@ -940,7 +986,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
                   <template v-if="detailCard.meta">
                     <div class="meta-grid-badges">
-                      <div class="meta-row" v-if="detailCard.meta.cardType"><span class="meta-k">Tipo de carta</span><span class="meta-v">{{ detailCard.meta.cardType }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.cardType"><span class="meta-k">Tipo de carta</span><span class="meta-v">{{ CARD_TYPE_ES[detailCard.meta.cardType] ?? detailCard.meta.cardType }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.cost != null"><span class="meta-k">Coste</span><span class="meta-v">{{ detailCard.meta.cost }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.strength != null"><span class="meta-k">Fuerza</span><span class="meta-v">{{ detailCard.meta.strength }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.level != null"><span class="meta-k">Nivel</span><span class="meta-v">{{ detailCard.meta.level }}</span></div>
@@ -948,7 +994,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                       <div class="meta-row" v-if="detailCard.meta.cardClasses?.length"><span class="meta-k">Clases</span><span class="meta-v">{{ detailCard.meta.cardClasses.join(', ') }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.regulation"><span class="meta-k">Regulación</span><span class="meta-v">{{ detailCard.meta.regulation }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.specialCost != null"><span class="meta-k">Coste Especial</span><span class="meta-v">{{ detailCard.meta.specialCost }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">Método de Invocación Especial</span><span class="meta-v">{{ detailCard.meta.specialSummonKind }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">Método de Invocación Especial</span><span class="meta-v">{{ SS_KIND_ES[detailCard.meta.specialSummonKind] ?? detailCard.meta.specialSummonKind }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.rarity"><span class="meta-k">Rareza</span><span class="meta-v">{{ detailCard.meta.rarity }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.colors?.length"><span class="meta-k">Colores</span><span class="meta-v">{{ detailCard.meta.colors.join(', ') }}</span></div>
                       <div class="meta-row meta-row--full" v-if="detailCard.meta.requirement"><span class="meta-k">Requerimiento</span><span class="meta-v">{{ detailCard.meta.requirement }}</span></div>
@@ -1015,7 +1061,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <div class="form-with-preview">
           <div class="form-main">
           <div class="form-grid">
-            <!-- Row 1 -->
+            <!-- Row 1: 4 fields in one row -->
             <div class="form-field">
               <label>Nombre *</label>
               <input v-model="form.cardName" @blur="lookupDriveCard" />
@@ -1023,11 +1069,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <div class="form-field">
               <label>Tipo</label>
               <select v-model="form.cardType">
-                <option v-for="t in CARD_TYPES" :key="t" :value="t">{{ t }}</option>
+                <option v-for="t in CARD_TYPES" :key="t" :value="t">{{ CARD_TYPE_ES[t] ?? t }}</option>
               </select>
             </div>
-
-            <!-- Row 2 -->
             <div class="form-field">
               <label>Edición *</label>
               <input v-model="form.edition" :disabled="!!editingMetaId" />
@@ -1051,32 +1095,34 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             </div>
 
             <!-- Row 3 -->
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Número de carta</label>
               <input v-model.number="form.cardNumber" type="number" />
             </div>
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Coste</label>
               <input v-model.number="form.cost" type="number" />
             </div>
 
             <!-- Row 4 -->
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Fuerza</label>
               <input v-model.number="form.strength" type="number" />
             </div>
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Nivel</label>
               <input v-model.number="form.level" type="number" />
             </div>
 
             <!-- Row 5 -->
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Regulación</label>
-              <input v-model="form.regulation" />
+              <input :value="form.regulation"
+                @input="form.regulation = $event.target.value.toUpperCase()"
+                style="text-transform: uppercase;" />
             </div>
 
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Rareza</label>
               <select v-model="form.rarity">
                 <option v-for="r in RARITIES" :key="r" :value="r">{{ r }}</option>
@@ -1084,15 +1130,15 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             </div>
 
             <!-- Row 6 -->
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Método de invoación especial</label>
               <select v-model="form.specialSummonKind">
                 <option :value="null">— none —</option>
-                <option v-for="k in SS_KINDS" :key="k" :value="k">{{ k }}</option>
+                <option v-for="k in SS_KINDS" :key="k" :value="k">{{ SS_KIND_ES[k] ?? k }}</option>
               </select>
             </div>
 
-            <div class="form-field">
+            <div class="form-field form-field--s2">
               <label>Coste especial</label>
               <input v-model.number="form.specialCost" type="number" />
             </div>
@@ -1231,7 +1277,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               <label>Limite de uso</label>
               <select v-model="effectForm.ussageLimit">
                 <option :value="null">— ninguno —</option>
-                <option v-for="u in USAGE_LIMITS" :key="u" :value="u">{{ u }}</option>
+                <option v-for="u in USAGE_LIMITS" :key="u" :value="u">{{ USAGE_LIMIT_ES[u] ?? u }}</option>
               </select>
             </div>
 
@@ -1272,14 +1318,14 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                   <button v-if="effectForm.effectBlocks.length > 1" type="button"
                     class="btn-ghost btn-xs btn-danger" @click="removeEffectBlock(i)">✕</button>
                 </div>
-                <div class="form-field">
+                <div class="form-field" style="grid-column: 1 / -1;">
                   <label>Condición de activación</label>
-                  <input v-model="block.activationCondition" placeholder="Cuando… / Si…"
+                  <textarea v-model="block.activationCondition" rows="2" placeholder="Cuando… / Si…"
                     @focus="trackBlockField(i, 'activationCondition', $event)" />
                 </div>
-                <div class="form-field">
+                <div class="form-field" style="grid-column: 1 / -1;">
                   <label>Coste</label>
-                  <input v-model="block.cost" placeholder="Paga… / Tributa..."
+                  <textarea v-model="block.cost" rows="2" placeholder="Paga… / Tributa..."
                     @focus="trackBlockField(i, 'cost', $event)" />
                 </div>
                 <div class="form-field" style="grid-column: 1 / -1;">
@@ -1443,6 +1489,13 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 .filter-select option { background: #1e1e1e; }
 .filter-input::placeholder { color: rgba(255,255,255,0.3); }
 .filter-check { width: 16px; height: 16px; cursor: pointer; accent-color: #3f51b5; }
+.sort-row { display: flex; gap: 0.4rem; align-items: center; }
+.sort-select { flex: 1; }
+.btn-sort-dir {
+  flex-shrink: 0; background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 6px;
+  color: #e0e0e0; padding: 0.38rem 0.55rem; font-size: 1rem; cursor: pointer; line-height: 1;
+}
+.btn-sort-dir:hover { border-color: #3f51b5; color: #7986cb; }
 .filter-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .filter-chips--colors { flex-wrap: nowrap; }
 .chip--color { padding: 0.2rem 0.45rem; font-size: 0.72rem; flex: 1; text-align: center; }
@@ -1628,6 +1681,9 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   align-items: center;
   padding-top: 1rem;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
 }
 .preview-img {
   width: 100%;
@@ -1651,7 +1707,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* Detail modal layout */
 .modal-content { display: flex; gap: 1.5rem; align-items: flex-start;}
-.modal-img-col { flex-shrink: 0; width: 35%; }
+.modal-img-col { flex-shrink: 0; width: 35%; position: sticky; top: 0; align-self: flex-start; }
 .modal-frame { width: 100%; aspect-ratio: 63 / 88; overflow: hidden; border-radius: 8px; background: var(--input-bg);  }
 .modal-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .modal-info-col { flex: 1; min-width: 0; }
@@ -1695,9 +1751,10 @@ input[type="range"]::-moz-range-thumb {
 .modal-actions    { margin-top: 1rem; display: flex; gap: 0.5rem; }
 
 /* Form grid */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.65rem; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.65rem; }
 .form-field { display: flex; flex-direction: column; gap: 0.25rem; }
 .form-field.full, .form-field--full { grid-column: 1 / -1; }
+.form-field--s2 { grid-column: span 2; }
 .form-field--inline { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 0.5rem; }
 .form-field label { font-size: 0.78rem; color: var(--text-secondary); }
 .form-field .hint  { font-size: 0.68rem; color: var(--text-muted); }
@@ -1789,6 +1846,7 @@ input[type="range"]::-moz-range-thumb {
   .modal-content { flex-direction: column; }
   .modal-img-col { width: 100%; max-width: 200px; }
   .form-grid { grid-template-columns: 1fr; }
+  .form-field--s2 { grid-column: span 1; }
   .effect-block-editor { grid-template-columns: 1fr; }
   .filter-bar { gap: 0.75rem; }
 }

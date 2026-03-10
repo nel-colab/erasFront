@@ -2,6 +2,14 @@
 import { defineStore } from 'pinia'
 import axios from 'axios';
 
+function extractError(e, fallback) {
+  const data = e?.response?.data
+  if (!data) return e?.message || fallback
+  if (typeof data === 'string') return data
+  // { message: "..." } or any field-keyed validation response like { password: "..." }
+  return data.message || Object.values(data).find(v => typeof v === 'string') || e?.message || fallback
+}
+
 function decodeJwt(token) {
   try {
     return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
@@ -10,9 +18,12 @@ function decodeJwt(token) {
 
 export const useAuthStore = defineStore('login', {
   state: () => {
+    const token = localStorage.getItem('auth_token') || null
+    const user  = JSON.parse(localStorage.getItem('auth_user') || 'null')
+    if (token) axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     return {
-      user: null,
-      token: null,
+      user,
+      token,
       loading: false,
       error: null,
     }},
@@ -37,12 +48,14 @@ export const useAuthStore = defineStore('login', {
           const payload = decodeJwt(token);
           this.user = { id: payload.sub, username };
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          localStorage.setItem('auth_token', token);
+          localStorage.setItem('auth_user', JSON.stringify(this.user));
         }
 
         return true;
       } catch (e) {
         this._reset(e);
-        this.error = (e && e.response && e.response.data && e.response.data.message) || e.message || 'Login failed';
+        this.error = extractError(e, 'Login failed');
         return false;
       } finally {
         this.loading = false;
@@ -63,12 +76,14 @@ export const useAuthStore = defineStore('login', {
           const payload = decodeJwt(token);
           this.user = { id: payload.sub, username, email };
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          localStorage.setItem('auth_token', token);
+          localStorage.setItem('auth_user', JSON.stringify(this.user));
         }
 
         return true;
       } catch (e) {
         this._reset(e);
-        this.error = (e && e.response && e.response.data && e.response.data.message) || e.message || 'Registration failed';
+        this.error = extractError(e, 'Registration failed');
         return false;
       } finally {
         this.loading = false;
@@ -116,10 +131,12 @@ export const useAuthStore = defineStore('login', {
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           const payload = decodeJwt(token);
           this.user = { ...this.user, id: payload.sub, username, email };
+          localStorage.setItem('auth_token', token);
+          localStorage.setItem('auth_user', JSON.stringify(this.user));
         }
         return true;
       } catch (e) {
-        this.error = (e && e.response && e.response.data && e.response.data.message) || e.message || 'Update failed';
+        this.error = extractError(e, 'Update failed');
         return false;
       } finally {
         this.loading = false;
@@ -134,9 +151,9 @@ export const useAuthStore = defineStore('login', {
       this.user = null;
       this.token = null;
       this.loading = false;
-      if (axios.defaults.headers.common['Authorization']) {
-        delete axios.defaults.headers.common['Authorization'];
-      }
+      delete axios.defaults.headers.common['Authorization'];
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
     }
   },
 })

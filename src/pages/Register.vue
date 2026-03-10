@@ -14,6 +14,8 @@ const confirmPassword = ref('')
 const error = ref('')
 const loading = ref(false)
 
+auth.error = null
+
 const register = async () => {
   error.value = ''
 
