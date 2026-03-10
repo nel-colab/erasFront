@@ -39,8 +39,8 @@ const doLogout = () => {
       <!-- Mobile title -->
       <div class="navbar-title-mobile d-block d-lg-none mx-auto text-center">
         <div class="eras-container">
-          <span class="eras-text">Eras</span>
-          <div class="sub-title">Juego TCG coleccionable</div>
+          <span class="eras-text">ERAS</span>
+          <div class="sub-title">Trading Card Game</div>
         </div>
       </div>
 
@@ -62,8 +62,8 @@ const doLogout = () => {
         <!-- Desktop title -->
         <div class="navbar-title d-none d-lg-block mx-auto">
           <div class="eras-container">
-            <span class="eras-text">Eras</span>
-            <div class="sub-title">Juego TCG coleccionable</div>
+            <span class="eras-text">ERAS</span>
+            <div class="sub-title">Trading Card Game</div>
           </div>
         </div>
 
@@ -79,7 +79,7 @@ const doLogout = () => {
             <router-link class="nav-link" to="/editions">Ediciones</router-link>
           </li>
           <li class="nav-item active">
-            <router-link class="nav-link" to="/DeckBuilder">Decks Builder</router-link>
+            <router-link class="nav-link" to="/DeckBuilder">Constructor de mazos</router-link>
           </li>
 
           <!-- ✅ FAQ link -->
@@ -122,17 +122,20 @@ const doLogout = () => {
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
                   <li>
-                    <router-link class="dropdown-item" to="/profile">Go to Profile</router-link>
+                    <router-link class="dropdown-item" to="/profile">Perfil</router-link>
                   </li>
                   <li>
-                    <router-link class="dropdown-item" to="/updates-manager">Manage Updates</router-link>
+                    <router-link class="dropdown-item" to="/my-decks">Mis mazos</router-link>
                   </li>
                   <li>
-                    <router-link class="dropdown-item" to="/card-ref">Card Reference Data</router-link>
+                    <router-link class="dropdown-item" to="/updates-manager">Gestionar cambios</router-link>
+                  </li>
+                  <li>
+                    <router-link class="dropdown-item" to="/card-ref">Datos de referencia</router-link>
                   </li>
                   <li><hr class="dropdown-divider"></li>
                   <li>
-                    <button class="dropdown-item text-danger" @click="doLogout">Log out</button>
+                    <button class="dropdown-item text-danger" @click="doLogout">Cerrar sesión</button>
                   </li>
                 </ul>
               </div>
@@ -141,7 +144,7 @@ const doLogout = () => {
 
           <!-- Theme toggle -->
           <button class="theme-toggle me-3" @click="theme.toggle()">
-            {{ theme.dark ? 'Light' : 'Dark' }}
+            {{ theme.dark ? 'Claro' : 'Oscuro' }}
           </button>
 
           <!-- Social icons -->
@@ -178,6 +181,7 @@ const doLogout = () => {
               <router-link to="/CardsEdit" class="btn btn-secondary w-100 fw-bold">EdiCard</router-link>
             </div>
             <router-link to="/profile" class="btn btn-outline-light w-100 fw-bold mb-2">Go to Profile</router-link>
+            <router-link to="/my-decks" class="btn btn-secondary w-100 fw-bold mb-2">Mis mazos</router-link>
             <router-link to="/updates-manager" class="btn btn-secondary w-100 fw-bold mb-2">Manage Updates</router-link>
             <router-link to="/card-ref" class="btn btn-secondary w-100 fw-bold mb-2">Card Reference Data</router-link>
             <button @click="doLogout" class="btn btn-outline-danger w-100 fw-bold">Log out</button>
@@ -191,13 +195,7 @@ const doLogout = () => {
 
 
 <style scoped>
-@font-face {
-  font-family: 'Arial';
-  src: url('/assets/fonts/Arial.woff2') format('woff2'),
-       url('/assets/fonts/Arial.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
-}
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Cinzel+Decorative:wght@400;700&display=swap');
 
 /* 🔹 Navbar style */
 .custom-navbar {
@@ -217,42 +215,68 @@ const doLogout = () => {
 
 .logo-img { height: 60px; object-fit: contain; }
 
-.eras-container { position: relative; display: inline-block; text-align: center; }
+.eras-container {
+  position: relative;
+  display: inline-block;
+  text-align: center;
+  line-height: 1;
+}
 
 .navbar-title {
-  font-family: 'Arial', sans-serif;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #333;
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  text-transform: uppercase;
-  letter-spacing: 3px;
   z-index: 2;
+  text-align: center;
+  white-space: nowrap;
 }
-.navbar-title .eras-text { color: #ffffff; }
+
+.navbar-title .eras-text {
+  font-family: 'Cinzel', serif;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #e8d5a3 0%, #c9a84c 40%, #f0e0a0 65%, #b8862a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: block;
+  filter: drop-shadow(0 1px 6px rgba(200,160,60,0.35));
+}
 
 .sub-title {
-  font-family: 'Arial', sans-serif;
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #ffffff;
-  margin-top: 1px;
-  text-transform: none;
-  letter-spacing: 1px;
-  position: relative;
-  top: -12px;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(220, 195, 130, 0.75);
+  margin-top: 0.15rem;
 }
 
+/* Mobile */
 .navbar-title-mobile {
-  font-family: 'Arial', sans-serif;
-  font-size: 1.7rem;
-  font-weight: 700;
-  color: #333;
-  letter-spacing: 2px;
+  text-align: center;
 }
-.navbar-title-mobile .eras-text { color: rgb(165, 139, 82); }
+.navbar-title-mobile .eras-text {
+  font-family: 'Cinzel', serif;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  background: linear-gradient(135deg, #e8d5a3 0%, #c9a84c 40%, #f0e0a0 65%, #b8862a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: block;
+}
+.navbar-title-mobile .sub-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 0.52rem;
+  letter-spacing: 0.22em;
+  color: rgba(220, 195, 130, 0.7);
+  margin-top: 0.1rem;
+}
 
 .social-icon {
   display: inline-flex;

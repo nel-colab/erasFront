@@ -1,10 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 
 const auth = useAuthStore()
 const isAuth = computed(() => auth.isAuthenticated)
+const router = useRouter()
 
 // ── Edition metadata ──────────────────────────────────────────────────────────
 const editions = ref([])
@@ -31,50 +33,9 @@ const sortEditionId = (a, b) => {
   return parseFloat(a.replace(/[^0-9.]/g, '')) - parseFloat(b.replace(/[^0-9.]/g, ''))
 }
 
-// ── Card gallery ──────────────────────────────────────────────────────────────
-const selectedEdition = ref(null)
-const cards = ref([])
-const loadingCards = ref(false)
-const selectedSub = ref(null)
-
-const selectEdition = async (edition) => {
-  if (selectedEdition.value?.editionId === edition.editionId) {
-    selectedEdition.value = null
-    cards.value = []
-    return
-  }
-  selectedEdition.value = edition
-  selectedSub.value = null
-  loadingCards.value = true
-  cards.value = []
-  try {
-    const { data } = await axios.get(`/api/drive/cards/db?edition=${edition.editionId}`)
-    cards.value = data.sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
-  } catch {
-    cards.value = []
-  } finally {
-    loadingCards.value = false
-  }
+const selectEdition = (edition) => {
+  router.push({ path: '/cards', query: { edition: edition.editionId } })
 }
-
-const isStructure = computed(() => selectedEdition.value?.editionId?.startsWith('ST'))
-
-const subEditions = computed(() => {
-  const subs = new Set(cards.value.map(c => c.sub_edition))
-  return [...subs].sort((a, b) => {
-    if (a === null) return -1
-    if (b === null) return 1
-    return parseInt(a) - parseInt(b)
-  })
-})
-
-const visibleCards = computed(() => {
-  if (!selectedEdition.value) return []
-  if (isStructure.value) return cards.value
-  return cards.value.filter(c => c.sub_edition === selectedSub.value)
-})
-
-const subLabel = (sub) => sub === null ? 'MAIN' : `SUB${sub}`
 
 // ── Create / Edit edition form ────────────────────────────────────────────────
 const showForm = ref(false)
@@ -196,7 +157,6 @@ onMounted(fetchEditions)
         v-for="ed in editions"
         :key="ed.editionId"
         class="edition-row"
-        :class="{ selected: selectedEdition?.editionId === ed.editionId }"
         @click="selectEdition(ed)"
       >
         <div class="row-image">
@@ -212,41 +172,6 @@ onMounted(fetchEditions)
         <button v-if="isAuth" class="btn-ghost btn-edit" @click="openEdit(ed, $event)">Edit</button>
       </div>
     </div>
-
-    <!-- Card gallery -->
-    <template v-if="selectedEdition">
-      <div class="gallery-header">
-        <h3>{{ selectedEdition.editionId }}<span v-if="selectedEdition.editionName"> — {{ selectedEdition.editionName }}</span></h3>
-      </div>
-
-      <!-- Sub-edition tabs (E* only, multiple subs) -->
-      <div v-if="!isStructure && subEditions.length > 1" class="sub-bar">
-        <button
-          v-for="sub in subEditions"
-          :key="sub ?? 'main'"
-          class="sub-btn"
-          :class="{ active: selectedSub === sub }"
-          @click="selectedSub = sub"
-        >
-          {{ subLabel(sub) }}
-        </button>
-      </div>
-
-      <div v-if="loadingCards" class="ed-empty">Loading cards…</div>
-      <div v-else-if="visibleCards.length === 0 && !loadingCards" class="ed-empty">No cards found for this selection.</div>
-
-      <div v-else class="card-grid">
-        <div v-for="card in visibleCards" :key="card.id" class="card-item">
-          <div class="card-frame">
-            <img :src="card.image_url" :alt="card.name" class="card-img" loading="lazy" />
-          </div>
-          <div class="card-label">
-            <span class="card-name">{{ card.name }}</span>
-            <span class="card-meta">{{ card.color_identity }} · #{{ card.number }}</span>
-          </div>
-        </div>
-      </div>
-    </template>
 
   </div>
 </template>
@@ -330,8 +255,6 @@ onMounted(fetchEditions)
   transition: border-color 0.2s, background 0.15s, box-shadow 0.15s;
 }
 .edition-row:hover { background: var(--input-bg); border-color: var(--text-muted); }
-.edition-row.selected { border-color: #3f51b5; }
-
 .row-image {
   flex-shrink: 0;
   width: 90px;
@@ -377,44 +300,6 @@ onMounted(fetchEditions)
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-
-/* Gallery */
-.gallery-header { margin-bottom: 0.75rem; }
-.gallery-header h3 { color: var(--text-primary); margin: 0; }
-
-/* Sub-edition tabs */
-.sub-bar { display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.sub-btn {
-  padding: 0.3rem 0.75rem;
-  border: 1px solid var(--card-border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.sub-btn.active { background: #4caf50; border-color: #4caf50; color: #fff; }
-
-/* Card grid */
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 0.75rem;
-}
-.card-frame {
-  width: 100%;
-  aspect-ratio: 63 / 88;
-  overflow: hidden;
-  border-radius: 6px;
-  background: var(--input-bg);
-}
-.card-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
-.card-item:hover .card-img { transform: scale(1.04); }
-.card-label { display: flex; flex-direction: column; margin-top: 0.3rem; gap: 0.1rem; }
-.card-name { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-meta { font-size: 0.68rem; color: var(--text-muted); }
 
 @media (max-width: 600px) {
   .form-grid { grid-template-columns: 1fr; }
