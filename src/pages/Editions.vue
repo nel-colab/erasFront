@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 
 const auth = useAuthStore()
-const isAuth = computed(() => auth.isAuthenticated)
+const canManageEditions = computed(() => auth.can('manage_editions'))
 const router = useRouter()
 
 // ── Edition metadata ──────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ onMounted(fetchEditions)
     <!-- Header -->
     <div class="ed-header">
       <h2>Editions</h2>
-      <button v-if="isAuth" class="btn-filled" @click="openCreate">
+      <button v-if="canManageEditions" class="btn-filled" @click="openCreate">
         + New Edition
       </button>
     </div>
@@ -169,7 +169,7 @@ onMounted(fetchEditions)
           <span class="tile-count" v-if="ed.numberOfCards">{{ ed.numberOfCards }} cards</span>
           <span class="tile-desc" v-if="ed.editionDescription">{{ ed.editionDescription }}</span>
         </div>
-        <button v-if="isAuth" class="btn-ghost btn-edit" @click="openEdit(ed, $event)">Edit</button>
+        <button v-if="canManageEditions" class="btn-ghost btn-edit" @click="openEdit(ed, $event)">Edit</button>
       </div>
     </div>
 
@@ -177,7 +177,11 @@ onMounted(fetchEditions)
 </template>
 
 <style scoped>
+
+
 .editions-page {
+  max-width:1600px;
+  margin:0 auto;
   padding: 1.5rem 1rem;
 }
 

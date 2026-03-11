@@ -13,13 +13,16 @@ const cardMap  = ref({})   // id → image_url
 const loading  = ref(true)
 const deleting = ref(null) // deck id being deleted
 
+const deckCoverUrl = deck =>
+  deck.deckImage ? (cardMap.value[deck.deckImage] ?? null) : null
+
+
 // ── Sort ──────────────────────────────────────────────────────────────────────
-const sortKey = ref('name')   // 'name' | 'username' | 'antiqueness'
+const sortKey = ref('name')   // 'name' | 'antiqueness'
 const sortDir = ref('asc')      // 'asc' | 'desc'
 
 const SORT_OPTIONS = [
   { value: 'name',     label: 'Nombre' },
-  { value: 'username',     label: 'Nombre usuario' },
   { value: 'antiqueness',    label: 'Antiguedad' },
 ]
 
@@ -34,15 +37,10 @@ function sortVal(c) {
 
 const toggleSortDir = () => { sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc' }
 
-
-
-const deckCoverUrl = deck =>
-  deck.deckImage ? (cardMap.value[deck.deckImage] ?? null) : null
-
 onMounted(async () => {
   try {
     const [decksRes, cardsRes] = await Promise.all([
-      axios.get(`/api/drive/decklists?userId=${auth.userId}`),
+      axios.get(`/api/drive/decklists?publicDecks=true`),
       axios.get('/api/drive/cards/db'),
     ])
     decks.value = decksRes.data
@@ -52,17 +50,7 @@ onMounted(async () => {
 })
 
 const editDeck = deck => {
-  router.push(`/deck-builder?id=${deck.id}`)
-}
-
-const deleteDeck = async deck => {
-  if (!confirm(`¿Eliminar el mazo "${deck.deckName}"?`)) return
-  deleting.value = deck.id
-  try {
-    await axios.delete(`/api/drive/decklists/${deck.id}`)
-    decks.value = decks.value.filter(d => d.id !== deck.id)
-  } catch (e) { console.error('Error deleting deck', e) }
-  finally { deleting.value = null }
+  router.push(`/deck-builder?id=${deck.id}&copy=true`)
 }
 
 const visibleDecks = computed(() => {
@@ -82,12 +70,14 @@ const visibleDecks = computed(() => {
       return 0
     })
 })
+
+
 </script>
 
 <template>
   <div class="my-decks-page">
     <div class="md-header">
-      <h2 class="md-title">Mis Mazos</h2>
+      <h2 class="md-title">Mazos públicos</h2>
 
       <div class="sort-controls">
 
@@ -113,14 +103,14 @@ const visibleDecks = computed(() => {
       <div class="spinner-border text-light" role="status"></div>
     </div>
 
-    <div v-else-if="decks.length === 0" class="md-empty">
+    <div v-else-if="visibleDecks.length === 0" class="md-empty">
       <i class="bi bi-collection md-empty-icon"></i>
       <p>No tienes mazos guardados.</p>
       <router-link v-if="canManageDecks" to="/deck-builder" class="btn-filled">Crear mazo</router-link>
     </div>
 
     <div v-else class="md-grid">
-      <div v-for="deck in decks" :key="deck.id" class="md-card">
+      <div v-for="deck in visibleDecks" :key="deck.id" class="md-card">
         <!-- Cover image -->
         <div class="md-cover">
           <img v-if="deckCoverUrl(deck)" :src="deckCoverUrl(deck)" :alt="deck.deckName" class="md-cover-img" />
@@ -133,25 +123,15 @@ const visibleDecks = computed(() => {
         <!-- Info -->
         <div class="md-info">
           <div class="md-name">{{ deck.deckName }}</div>
+          <div class="md-author">por {{ deck.username }}</div>
           <div class="md-actions" v-if="canManageDecks">
-            <button class="md-btn md-btn-edit" @click="editDeck(deck)" title="Editar mazo">
-              <i class="bi bi-pencil-fill"></i> Editar
-            </button>
-            <button class="md-btn md-btn-delete"
-              @click="deleteDeck(deck)"
-              :disabled="deleting === deck.id"
-              title="Eliminar mazo">
-              <i class="bi bi-trash-fill"></i>
+            <button class="md-btn md-btn-edit" @click="editDeck(deck)" title="Revisar mazo">
+              <i class="bi bi-pencil-fill"></i> Revisar
             </button>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- FAB to create new deck -->
-    <router-link v-if="canManageDecks" to="/deck-builder" class="md-fab" title="Nuevo mazo">
-      <i class="bi bi-plus-lg"></i>
-    </router-link>
   </div>
 </template>
 

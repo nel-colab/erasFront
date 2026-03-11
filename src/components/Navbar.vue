@@ -81,6 +81,9 @@ const doLogout = () => {
           <li class="nav-item active">
             <router-link class="nav-link" to="/DeckBuilder">Constructor de mazos</router-link>
           </li>
+          <li class="nav-item active">
+            <router-link class="nav-link" to="/public-decks">Mazos</router-link>
+          </li>
 
           <!-- ✅ FAQ link -->
           <li v-if="isAdmin" class="nav-item active">
@@ -106,8 +109,8 @@ const doLogout = () => {
           <!-- Auth (desktop) -->
           <div class="d-none d-lg-inline-flex gap-3 me-4 align-items-center">
             <template v-if="!isAuth">
-              <router-link to="/login" class="btn-nav-outline">Log in</router-link>
-              <router-link to="/register" class="btn-nav-primary">Sign up</router-link>
+              <router-link to="/login" class="btn-nav-outline">Iniciar Sesión</router-link>
+              <router-link to="/register" class="btn-nav-primary">Registrarse</router-link>
             </template>
 
             <template v-else>
@@ -128,10 +131,22 @@ const doLogout = () => {
                     <router-link class="dropdown-item" to="/my-decks">Mis mazos</router-link>
                   </li>
                   <li>
-                    <router-link class="dropdown-item" to="/updates-manager">Gestionar cambios</router-link>
+                    <router-link v-if="auth.can('manage_cards')" class="dropdown-item" to="/updates-manager">Gestionar cambios</router-link>
                   </li>
                   <li>
-                    <router-link class="dropdown-item" to="/card-ref">Datos de referencia</router-link>
+                    <router-link v-if="auth.can('manage_cards')" class="dropdown-item" to="/card-ref">Datos de referencia</router-link>
+                  </li>
+                  <li>
+                    <router-link v-if="auth.can('manage_home')" class="dropdown-item" to="/home-manager">Gestionar foro</router-link>
+                  </li>
+                  <li>
+                    <router-link v-if="auth.can('manage_users')" class="dropdown-item" to="/users-manager">Gestionar usuarios</router-link>
+                  </li>
+                  <li>
+                    <router-link v-if="auth.can('manage_roles')" class="dropdown-item" to="/roles">Gestionar roles</router-link>
+                  </li>
+                  <li>
+                    <router-link v-if="auth.can('manage_permissions') || auth.can('read_permissions')" class="dropdown-item" to="/permissions">Gestionar permisos</router-link>
                   </li>
                   <li><hr class="dropdown-divider"></li>
                   <li>
@@ -167,8 +182,6 @@ const doLogout = () => {
             {{ theme.dark ? 'Light mode' : 'Dark mode' }}
           </button>
 
-          <!-- FAQ link for mobile -->
-          <router-link to="/faq" class="btn btn-secondary w-100 fw-bold mb-2">FAQ</router-link>
 
           <template v-if="!isAuth">
             <router-link to="/login" class="btn-nav-outline w-100 mb-2 text-center">Log in</router-link>
@@ -184,6 +197,9 @@ const doLogout = () => {
             <router-link to="/my-decks" class="btn btn-secondary w-100 fw-bold mb-2">Mis mazos</router-link>
             <router-link to="/updates-manager" class="btn btn-secondary w-100 fw-bold mb-2">Manage Updates</router-link>
             <router-link to="/card-ref" class="btn btn-secondary w-100 fw-bold mb-2">Card Reference Data</router-link>
+            <router-link to="/users-manager" class="btn btn-secondary w-100 fw-bold mb-2">Gestionar usuarios</router-link>
+            <router-link to="/roles" class="btn btn-secondary w-100 fw-bold mb-2">Roles</router-link>
+            <router-link to="/permissions" class="btn btn-secondary w-100 fw-bold mb-2">Permisos</router-link>
             <button @click="doLogout" class="btn btn-outline-danger w-100 fw-bold">Log out</button>
           </template>
         </div>

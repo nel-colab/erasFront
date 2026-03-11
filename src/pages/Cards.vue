@@ -5,7 +5,6 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 
 const auth = useAuthStore()
-const isAuth = computed(() => auth.isAuthenticated)
 
 const sidebarOpen = ref(true)
 
@@ -956,7 +955,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               />
               <template v-else>
                 <h1 class="modal-card-name">{{ detailCard.name }}</h1>
-                <button v-if="isAuth" class="btn-modal-edit-name" @click="startEditName(detailCard, $event)" title="Edit name">
+                <button v-if="auth.can('manage_cards')" class="btn-modal-edit-name" @click="startEditName(detailCard, $event)" title="Edit name">
                   <i class="bi bi-pencil"></i>
                 </button>
               </template>
@@ -981,7 +980,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
                   <div v-if="!detailCard.meta" class="no-meta-notice">
                     Carta sin metadatos aun.
-                    <button v-if="isAuth" class="btn-filled btn-sm" @click="openCreate(detailCard)">Crear</button>
+                    <button v-if="auth.can('manage_cards')" class="btn-filled btn-sm" @click="openCreate(detailCard)">Crear</button>
                   </div>
 
                   <template v-if="detailCard.meta">
@@ -1023,7 +1022,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                     </div>
                   </template>
 
-                  <div class="modal-actions" v-if="isAuth && detailCard.meta">
+                  <div class="modal-actions" v-if="auth.can('manage_cards') && detailCard.meta">
                     <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Editar</button>
                   </div>
                 </div>

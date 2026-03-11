@@ -30,10 +30,13 @@ const register = async () => {
 
   try {
     loading.value = true
-    const ok = await auth.register({ email: email.value, username: username.value, password: password.value })
+
+    const role = await auth.getRoleByName('USER')
+    
+    const ok = await auth.register({ email: email.value, username: username.value, password: password.value, role: role.id })
 
     if (ok) {
-      Swal.fire('Your account has been created. You can now log in.').then(() => {
+      Swal.fire('Tu cuenta fue creada exitosamente. Validala desde tu correo para poder habilitarla.').then(() => {
         router.push('/login')
       })
     } else {
@@ -110,3 +113,19 @@ const register = async () => {
     </div>
   </div>
 </template>
+
+<style>
+.form-group-t{
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.5rem;
+}
+
+
+.auth-card h1{
+  margin-bottom: 0.5rem;
+}
+
+
+</style>

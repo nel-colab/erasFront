@@ -16,6 +16,14 @@ function decodeJwt(token) {
   } catch { return {} }
 }
 
+function buildUser(payload, extra = {}) {
+  return {
+    id: payload.sub,
+    permissions: Array.isArray(payload.permissions) ? payload.permissions : [],
+    ...extra,
+  }
+}
+
 export const useAuthStore = defineStore('login', {
   state: () => {
     const token = localStorage.getItem('auth_token') || null
@@ -31,6 +39,8 @@ export const useAuthStore = defineStore('login', {
     isAuthenticated: (state) => !!state.token,
     username: (state) => (state.user && state.user.username) || '',
     userId: (state) => (state.user && state.user.id) || null,
+    permissions: (state) => (state.user && state.user.permissions) || [],
+    can: (state) => (permission) => ((state.user && state.user.permissions) || []).includes(permission),
   },
   actions: {
 
@@ -46,7 +56,7 @@ export const useAuthStore = defineStore('login', {
         if (token) {
           this.token = token;
           const payload = decodeJwt(token);
-          this.user = { id: payload.sub, username };
+          this.user = buildUser(payload, { username });
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           localStorage.setItem('auth_token', token);
           localStorage.setItem('auth_user', JSON.stringify(this.user));
@@ -74,7 +84,7 @@ export const useAuthStore = defineStore('login', {
         if (token) {
           this.token = token;
           const payload = decodeJwt(token);
-          this.user = { id: payload.sub, username, email };
+          this.user = buildUser(payload, { username, email });
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           localStorage.setItem('auth_token', token);
           localStorage.setItem('auth_user', JSON.stringify(this.user));
@@ -85,6 +95,21 @@ export const useAuthStore = defineStore('login', {
         this._reset(e);
         this.error = extractError(e, 'Registration failed');
         return false;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async getRoleByName({ name }) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const { data } = await axios.get(`/api/roles/${name}`);
+        return data;
+      } catch (e) {
+        this._reset(e);
+        this.error = extractError(e, 'Failed to fetch role');
+        return null;
       } finally {
         this.loading = false;
       }
@@ -130,7 +155,7 @@ export const useAuthStore = defineStore('login', {
           this.token = token;
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           const payload = decodeJwt(token);
-          this.user = { ...this.user, id: payload.sub, username, email };
+          this.user = { ...this.user, ...buildUser(payload, { username, email }) };
           localStorage.setItem('auth_token', token);
           localStorage.setItem('auth_user', JSON.stringify(this.user));
         }

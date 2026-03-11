@@ -12,6 +12,10 @@ import Cards from '../pages/Cards.vue'
 import CardRefManager from '../pages/CardRefManager.vue'
 import DeckBuilder from '../pages/DeckBuilder.vue'
 import MyDecks from '../pages/MyDecks.vue'
+import PublicDecks from '../pages/PublicDecks.vue'
+import RolesManager from '../pages/RolesManager.vue'
+import PermissionsManager from '../pages/PermissionsManager.vue'
+import UsersManager from '../pages/UsersManager.vue'
 import NotFound from '../pages/NotFound.vue'
 
 const routes = [
@@ -26,6 +30,10 @@ const routes = [
   { path: '/card-ref', component: CardRefManager },
   { path: '/deck-builder', component: DeckBuilder, alias: ['/DeckBuilder'], meta: { public: true } },
   { path: '/my-decks', component: MyDecks },
+  { path: '/public-decks', component: PublicDecks, meta: { public: true } },
+  { path: '/roles', component: RolesManager },
+  { path: '/permissions', component: PermissionsManager },
+  { path: '/users-manager', component: UsersManager },
   { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
 ]
 
