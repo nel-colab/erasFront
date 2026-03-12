@@ -3,10 +3,15 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 import { useThemeStore } from '@/store/theme'
+import { useCardsStore } from '@/store/cards'
+import { ref } from 'vue'
+
+const refreshKey = ref(Date.now())
 
 const router = useRouter()
 const auth = useAuthStore()
 const theme = useThemeStore()
+const cardsStore = useCardsStore()
 
 const isAuth = computed(() => auth.isAuthenticated)
 const username = computed(() => auth.username || 'Jugador')
@@ -25,6 +30,11 @@ const isAdmin = computed(() => {
 const doLogout = () => {
   auth.logout()
   router.push('/home')
+}
+
+const refreshCards = async () => {
+  cardsStore.loaded = false
+  await cardsStore.loadCards(cardsStore.lastEdition)
 }
 </script>
 
@@ -175,6 +185,14 @@ const doLogout = () => {
             </a>
           </div>
         </div>
+
+        <button
+          v-if="auth.can('manage_cards')"
+          class="btn-nav-outline me-2"
+          @click="refreshCards"
+        >
+          Refresh Cards
+        </button>
 
         <!-- Auth buttons (mobile inside collapse) -->
         <div class="d-lg-none w-100 mt-3">

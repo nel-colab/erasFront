@@ -1062,7 +1062,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           >
             <div class="card-frame">
               <img
-                :src="card.image_url"
+                :src="card.image_url + '?t=' + (card.timeStamp || '')"
                 :alt="card.name"
                 class="card-img"
                 loading="lazy"
@@ -1196,7 +1196,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             
               <div class="modal-img-col">
                 <div class="modal-frame">
-                  <img :src="detailCard.image_url" :alt="detailCard.name" class="modal-img" />
+                  <img :src="detailCard.image_url + '?t=' + (detailCard.timeStamp || '')" :alt="detailCard.name" class="modal-img" />
                 </div>
               </div>
 

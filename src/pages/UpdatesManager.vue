@@ -1,4 +1,5 @@
 <script setup>
+import { useCardsStore } from '@/store/cards'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
@@ -8,6 +9,8 @@ const applyingAll = ref(false)
 const error = ref('')
 const successMsg = ref('')
 const itemState = ref({}) // { [id]: 'applying' | 'rejecting' | 'done' | 'error' }
+
+const cardsStore = useCardsStore()
 
 const fetchChanges = async () => {
   loading.value = true
@@ -27,9 +30,17 @@ const applyOne = async (fileId) => {
   itemState.value[fileId] = 'applying'
   successMsg.value = ''
   error.value = ''
+
   try {
     await axios.post(`/api/drive/staged/apply/${fileId}`)
+
+    // remove from staged list
     changes.value = changes.value.filter(c => c.id !== fileId)
+
+    // 🔹 invalidate cards cache
+    cardsStore.loaded = false
+    await cardsStore.loadCards(cardsStore.lastEdition)
+
     successMsg.value = `Change applied: ${fileId}`
   } catch (e) {
     itemState.value[fileId] = 'error'
@@ -41,6 +52,7 @@ const rejectOne = async (fileId) => {
   itemState.value[fileId] = 'rejecting'
   successMsg.value = ''
   error.value = ''
+
   try {
     await axios.delete(`/api/drive/staged/${fileId}`)
     changes.value = changes.value.filter(c => c.id !== fileId)
@@ -55,9 +67,16 @@ const applyAll = async () => {
   applyingAll.value = true
   successMsg.value = ''
   error.value = ''
+
   try {
     const { data } = await axios.post('/api/drive/staged/apply')
+
+    // 🔹 invalidate cards cache
+    cardsStore.loaded = false
+    await cardsStore.loadCards(cardsStore.lastEdition)
+
     successMsg.value = `Applied ${data.applied} change(s) successfully`
+
     await fetchChanges()
   } catch (e) {
     error.value = e?.response?.data?.error || e.message || 'Failed to apply all changes'
