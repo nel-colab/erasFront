@@ -129,6 +129,11 @@ const gridStyle = computed(() => ({
 }))
 
 // ── Merge ─────────────────────────────────────────────────────────────────────
+function buildCardKey(edition, number, sub, color) {
+  return `${edition}|${number}|${sub ?? ''}|${color ?? ''}`
+}
+
+
 const metaMap = computed(() => {
   const m = new Map()
 
@@ -150,7 +155,9 @@ const metaMap = computed(() => {
   return m
 })
 const allMerged  = computed(() =>
-  driveCards.value.map(dc => ({ ...dc, meta: metaMap.value.get(dc.edition + '|' + dc.number + '|' + dc.sub_edition + '|' + dc.colorIdentity) ?? null }))
+  driveCards.value.map(dc => ({ ...dc, meta: metaMap.value.get(
+  buildCardKey(dc.edition, dc.number, dc.sub_edition, dc.color_identity)
+)}))
 )
 const visibleCards = computed(() => {
   const allColors       = fColors.value.length === COLOR_IDENTITIES.length
