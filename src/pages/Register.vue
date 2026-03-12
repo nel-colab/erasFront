@@ -30,10 +30,8 @@ const register = async () => {
 
   try {
     loading.value = true
-
-    const role = await auth.getRoleByName('USER')
     
-    const ok = await auth.register({ email: email.value, username: username.value, password: password.value, role: role.id })
+    const ok = await auth.register({ email: email.value, username: username.value, password: password.value})
 
     if (ok) {
       Swal.fire('Tu cuenta fue creada exitosamente. Validala desde tu correo para poder habilitarla.').then(() => {
