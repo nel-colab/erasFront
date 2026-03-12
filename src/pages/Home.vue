@@ -118,8 +118,8 @@ const saveHome = async () => {
   try {
 
     const payload = {
-      edition: selectedEdition.value,
-      decks: topDecks.value.decks.map((d, i) => ({
+      edition: home.selectedEdition,
+      decks: home.topDecks.decks.map((d, i) => ({
         deckPosition: String(i),
         deck: d.raw
       }))
@@ -198,7 +198,7 @@ const deckLink = deck =>
 
 
       <!-- Top decks -->
-      <div class="hero-decks">
+      <div v-if="home.loaded" class="hero-decks">
 
 
 

@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import Navbar from './components/Navbar.vue'
 import { useThemeStore } from './store/theme'
 
-const showWelcomeModal = ref(true)
+const showWelcomeModal = ref(false)
 
 const theme = useThemeStore()
 
@@ -12,9 +12,7 @@ const version = "v1.0.0"
 onMounted(() => {
   theme.init()
 
-  const seen = localStorage.getItem("welcomeModalSeen")
-
-  if (!seen) {
+  if (!localStorage.getItem("welcomeModalSeen")) {
     showWelcomeModal.value = true
   }
 })
