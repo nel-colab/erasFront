@@ -2,11 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
-import { useAuthStore } from '@/store/login'
 
-const auth   = useAuthStore()
 const router = useRouter()
-const canManageDecks = computed(() => auth.can('manage_decks'))
 
 const decks    = ref([])
 const cardMap  = ref({})   // id → image_url
@@ -57,7 +54,7 @@ const visibleDecks = computed(() => {
   const dir = sortDir.value === 'asc' ? 1 : -1
 
   return decks.value
-    .filter(d => !d.privateDeck || d.userId === auth.userId || canManageDecks.value)
+    .filter(d => !d.privateDeck || d.userId === auth.userId)
     .sort((a, b) => {
       const va = sortVal(a)
       const vb = sortVal(b)
@@ -103,11 +100,6 @@ const visibleDecks = computed(() => {
       <div class="spinner-border text-light" role="status"></div>
     </div>
 
-    <div v-else-if="visibleDecks.length === 0" class="md-empty">
-      <i class="bi bi-collection md-empty-icon"></i>
-      <p>No tienes mazos guardados.</p>
-      <router-link v-if="canManageDecks" to="/deck-builder" class="btn-filled">Crear mazo</router-link>
-    </div>
 
     <div v-else class="md-grid">
       <div v-for="deck in visibleDecks" :key="deck.id" class="md-card">
@@ -124,7 +116,7 @@ const visibleDecks = computed(() => {
         <div class="md-info">
           <div class="md-name">{{ deck.deckName }}</div>
           <div class="md-author">por {{ deck.username }}</div>
-          <div class="md-actions" v-if="canManageDecks">
+          <div class="md-actions">
             <button class="md-btn md-btn-edit" @click="editDeck(deck)" title="Revisar mazo">
               <i class="bi bi-pencil-fill"></i> Revisar
             </button>
