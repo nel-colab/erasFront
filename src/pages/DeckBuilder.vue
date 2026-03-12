@@ -1,12 +1,18 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 
 const auth   = useAuthStore()
-const isAuth = computed(() => auth.isAuthenticated)
+const canManageDecks = computed(() => auth.can('manage_decks'))
 const route  = useRoute()
+
+
+// ── Lazy render for search results ───────────────────────────────────────
+const renderCount = ref(60)     // how many cards render initially
+const LOAD_MORE = 40            // how many to add per scroll
+
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
@@ -108,6 +114,10 @@ const searchResults = computed(() => {
     .filter(c => !fEdition.value || c.edition === fEdition.value)
 })
 
+const visibleCards = computed(() => {
+  return searchResults.value.slice(0, renderCount.value)
+})
+
 // ── Selected card ─────────────────────────────────────────────────────────
 const selectedCard = ref(null)
 const selectCard   = card => { selectedCard.value = card }
@@ -119,6 +129,8 @@ const deckEntries = ref([])
 const savedState  = ref(null)
 const dirty       = ref(false)
 const saving      = ref(false)
+const deckImage   = ref(null)
+const privateDeck  = ref(false)
 
 const totalCards   = computed(() => deckEntries.value.reduce((s, e) => s + e.count, 0))
 const deckCountMap = computed(() => {
@@ -126,12 +138,20 @@ const deckCountMap = computed(() => {
   deckEntries.value.forEach(e => { m[e.card.id] = e.count })
   return m
 })
+const changeDeckPrivacy = () => {
+  privateDeck.value = !privateDeck.value
+  dirty.value = true
+}
+
 const countInDeck = cardId => deckCountMap.value[cardId] ?? 0
 
 const MAX_COPIES = 4
+const MAX_CARDS = 50
 
 const addToDeck = card => {
   const existing = deckEntries.value.find(e => e.card.id === card.id)
+  
+  if (totalCards.value >= MAX_CARDS) return
   if (existing) {
     if (existing.count >= MAX_COPIES) return
     existing.count++
@@ -140,6 +160,8 @@ const addToDeck = card => {
   }
   dirty.value = true
   selectedCard.value = card
+  if (!deckImage.value) deckImage.value = card.id
+  
 }
 
 const removeFromDeck = cardId => {
@@ -147,6 +169,12 @@ const removeFromDeck = cardId => {
   if (idx === -1) return
   if (deckEntries.value[idx].count > 1) deckEntries.value[idx].count--
   else deckEntries.value.splice(idx, 1)
+  dirty.value = true
+  if (deckImage.value === cardId) deckImage.value = null
+}
+
+const makeDeckImage = cardId => {
+  deckImage.value = cardId
   dirty.value = true
 }
 
@@ -181,10 +209,10 @@ const onDropToDeck = e => {
 
 // ── Save / Discard / Share ─────────────────────────────────────────────────
 const saveDeck = async () => {
-  if (!isAuth.value) return
+  if (!canManageDecks.value) return
   const cards     = deckEntries.value.flatMap(e => Array(e.count).fill(e.card.id))
-  const deckImage = deckEntries.value[0]?.card.id ?? null
-  const payload   = { deckName: deckName.value, cards, deckImage, userId: auth.userId, username: auth.username }
+  
+  const payload   = { deckName: deckName.value, cards, deckImage: deckImage.value, userId: auth.userId, username: auth.username , privateDeck: privateDeck.value }
   saving.value = true
   try {
     if (deckId.value) {
@@ -271,10 +299,10 @@ const renderCardKwEffect = ke => {
 }
 
 // ── Load existing deck ────────────────────────────────────────────────────
-const loadDeck = async id => {
+const loadDeck = async (id, copy) => {
   try {
     const { data } = await axios.get(`/api/drive/decklists/${id}`)
-    deckId.value   = data.id
+    
     deckName.value = data.deckName ?? 'Mazo'
     const countMap = {}
     ;(data.cards ?? []).forEach(cId => { countMap[cId] = (countMap[cId] ?? 0) + 1 })
@@ -285,7 +313,16 @@ const loadDeck = async id => {
     }
     deckEntries.value = entries
     savedState.value  = JSON.parse(JSON.stringify(entries))
-    dirty.value = false
+    deckImage.value = data.deckImage || (entries[0]?.card.id ?? null)
+
+    if (copy==='true') {
+      deckId.value = null
+      deckName.value += ' (copia)'
+      dirty.value = true
+    }else{
+      deckId.value   = data.id
+      dirty.value = false
+    }
   } catch (e) { console.error('Error loading deck', e) }
 }
 
@@ -297,6 +334,9 @@ const sortEdId = (a, b) => {
 
 onMounted(async () => {
   loadingCards.value = true
+
+  window.addEventListener('scroll', onScroll)
+
   try {
     const [driveRes, metaRes, edRes, refRes] = await Promise.all([
       axios.get('/api/drive/cards/db'),
@@ -304,14 +344,43 @@ onMounted(async () => {
       axios.get('/api/drive/editions'),
       axios.get('/api/cards/ref'),
     ])
+
     driveCards.value = driveRes.data.sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
     metaCards.value  = metaRes.data
     editions.value   = edRes.data.sort((a, b) => sortEdId(a.editionId, b.editionId))
     refData.value    = refRes.data
-  } catch (e) { console.error(e) }
-  finally { loadingCards.value = false }
-  if (route.query.id) await loadDeck(route.query.id)
+
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loadingCards.value = false
+  }
+
+  if (route.query.id) {
+    await loadDeck(route.query.id, route.query.copy)
+  }
 })
+
+
+const onScroll = () => {
+  const scrollBottom =
+    window.innerHeight + window.scrollY >= document.body.offsetHeight - 400
+
+  if (scrollBottom && renderCount.value < searchResults.value.length) {
+    renderCount.value += LOAD_MORE
+  }
+}
+
+watch(searchResults, () => {
+  renderCount.value = 60
+})
+
+watch(deckEntries, () => {
+  if (!deckEntries.value.some(e => e.card.id === deckImage.value)) {
+    deckImage.value = deckEntries.value[0]?.card.id ?? null
+  }
+})
+
 </script>
 
 <template>
@@ -346,7 +415,7 @@ onMounted(async () => {
             <span class="db-copy-num">{{ countInDeck(selectedCard.id) }}</span>
             <span class="db-copy-label">en el mazo</span>
           </div>
-          <button class="db-copy-btn db-copy-btn--add" @click="addToDeck(selectedCard)" :disabled="countInDeck(selectedCard.id) >= MAX_COPIES">
+          <button class="db-copy-btn db-copy-btn--add" @click="addToDeck(selectedCard)" :disabled="countInDeck(selectedCard.id) >= MAX_COPIES || totalCards >= MAX_CARDS">
             <i class="bi bi-plus"></i>
           </button>
         </div>
@@ -418,13 +487,23 @@ onMounted(async () => {
     <div class="db-mid">
       <!-- Header -->
       <div class="db-mid-header">
-        <input class="db-deck-name" v-model="deckName" placeholder="Nombre del mazo"
-          @input="dirty = true" />
+        <div class="db-deck-header">
+          <input
+            class="db-deck-name"
+            v-model="deckName"
+            placeholder="Nombre del mazo"
+            @input="dirty = true"
+          />
+
+          <button class="db-private-btn" v-on:click="changeDeckPrivacy">
+            <i :class="privateDeck ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+          </button>
+        </div>
         <div class="db-mid-actions">
           <div class="db-save-group">
             <button class="btn-filled" @click="saveDeck"
-              :disabled="!isAuth || saving || !dirty"
-              :title="!isAuth ? 'Inicia sesión para guardar' : ''">
+              :disabled="!canManageDecks || saving || !dirty"
+              :title="!canManageDecks ? 'Necesitas el permiso manage_decks para guardar' : ''">
               {{ saving ? 'Guardando…' : 'Guardar' }}
             </button>
             <button class="db-discard-btn" @click="discardChanges"
@@ -441,7 +520,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="db-deck-count">{{ totalCards }} carta{{ totalCards !== 1 ? 's' : '' }}</div>
+      <div class="db-deck-count">{{ totalCards }} de 50 cartas</div>
 
       <!-- Drop zone + grid -->
       <div class="db-deck-scroll"
@@ -469,12 +548,25 @@ onMounted(async () => {
                 @dragstart="onSearchDragStart(entry.card, $event)"
                 @click="selectCard(entry.card)"
                 @contextmenu.prevent="removeFromDeck(entry.card.id)">
+
                 <img :src="entry.card.image_url" :alt="entry.card.name" class="db-deck-img" />
+
+                <!-- Deck image button (top-left) -->
+                <button
+                  class="db-ctrl-btn-deck-image"
+                  :class="{ selected: deckImage === entry.card.id }"
+                  :disabled="deckImage === entry.card.id"
+                  @click.stop="makeDeckImage(entry.card.id)"
+                >
+                  <i class="bi bi-image"></i>
+                </button>
+
                 <div class="db-deck-card-controls" @click.stop>
                   <button class="db-ctrl-btn" @click="removeFromDeck(entry.card.id)">−</button>
                   <span class="db-ctrl-count">{{ entry.count }}</span>
-                  <button class="db-ctrl-btn" @click="addToDeck(entry.card)" :disabled="entry.count >= MAX_COPIES">+</button>
+                  <button class="db-ctrl-btn" @click="addToDeck(entry.card)" :disabled="entry.count >= MAX_COPIES || totalCards >= MAX_CARDS">+</button>
                 </div>
+
               </div>
             </div>
           </div>
@@ -514,16 +606,16 @@ onMounted(async () => {
       <div v-if="loadingCards" class="db-loading">Cargando…</div>
       <div v-else class="db-search-scroll">
         <div class="db-search-grid">
-          <div v-for="card in searchResults" :key="card.id"
+          <div v-for="card in visibleCards" :key="card.id"
             class="db-search-card"
-            :class="{ 'db-search-card--selected': selectedCard?.id === card.id, 'db-search-card--maxed': countInDeck(card.id) >= MAX_COPIES }"
+            :class="{ 'db-search-card--selected': selectedCard?.id === card.id, 'db-search-card--maxed': countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS }"
             draggable="true"
             @dragstart="onSearchDragStart(card, $event)"
             @click="selectCard(card)"
             @contextmenu.prevent="addToDeck(card)">
             <img :src="card.image_url" :alt="card.name" class="db-search-img" />
-            <span v-if="countInDeck(card.id) > 0" class="db-count-badge" :class="{ 'db-count-badge--max': countInDeck(card.id) >= MAX_COPIES }">{{ countInDeck(card.id) }}</span>
-            <button class="db-search-add" @click.stop="addToDeck(card)" :disabled="countInDeck(card.id) >= MAX_COPIES" title="Añadir">+</button>
+            <span v-if="countInDeck(card.id) > 0" class="db-count-badge" :class="{ 'db-count-badge--max': countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS }">{{ countInDeck(card.id) }}</span>
+            <button class="db-search-add" @click.stop="addToDeck(card)" :disabled="countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS" title="Añadir">+</button>
           </div>
         </div>
       </div>
@@ -737,6 +829,30 @@ onMounted(async () => {
 }
 
 .db-mid-header { display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0; }
+
+.db-deck-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.db-private-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.db-private-btn i {
+  font-size: 1.1rem;
+}
+
+
 .db-deck-name {
   background: var(--input-bg); border: 1px solid var(--input-border);
   border-radius: 6px; color: var(--text-primary);
@@ -791,6 +907,7 @@ onMounted(async () => {
 }
 .db-deck-grid--dragover { outline: 2px dashed #3f51b5; border-radius: 6px; }
 
+
 .db-deck-card {
   position: relative; cursor: pointer;
   border-radius: 5px; overflow: hidden;
@@ -814,8 +931,48 @@ onMounted(async () => {
   display: flex; align-items: center; justify-content: center;
   transition: background 0.12s;
 }
+
 .db-ctrl-btn:hover { background: #3f51b5; border-color: #3f51b5; }
 .db-ctrl-count { font-size: 0.78rem; color: #fff; font-weight: 700; min-width: 14px; text-align: center; }
+
+.db-ctrl-btn-deck-image {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.55);
+
+  color: #fff; /* default icon color */
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.db-ctrl-btn-deck-image.selected {
+  color: #ffd54f; /* yellow icon */
+}
+
+.db-ctrl-btn-deck-image.selected {
+  color: #ffd54f;
+  background: rgba(0,0,0,0.75);
+}
+
+.db-ctrl-btn-deck-image.selected {
+  background: rgba(63,81,181,0.5);
+}
+
+.db-ctrl-btn-deck-image:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
 
 /* ══ RIGHT ═══════════════════════════════════════════════════════════════════ */
 .db-right {

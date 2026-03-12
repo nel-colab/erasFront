@@ -158,7 +158,8 @@ const save = async () => {
 /* ── Messages ────────────────────────────────────────────────────────────── */
 .profile-success {
   background: rgba(39,174,96,0.1);
-  border: 1px solid rgba(39,174,96,0.3);
+  border: 1px solid rgba(39,174,96,0.35);
+  border-left: 4px solid var(--success-color);
   border-radius: 8px;
   color: var(--success-color);
   padding: 0.65rem 1rem;
@@ -168,7 +169,8 @@ const save = async () => {
 
 .profile-error {
   background: rgba(192,57,43,0.1);
-  border: 1px solid rgba(192,57,43,0.3);
+  border: 1px solid rgba(192,57,43,0.35);
+  border-left: 4px solid var(--error-color);
   border-radius: 8px;
   color: var(--error-color);
   padding: 0.65rem 1rem;
