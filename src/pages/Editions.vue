@@ -47,12 +47,13 @@ const form = ref({
   editionName: '',
   numberOfCards: 0,
   editionDescription: '',
-  editionImage: ''
+  editionImage: '',
+  releaseDate: ''
 })
 
 const openCreate = () => {
   editingId.value = null
-  form.value = { editionId: '', editionName: '', numberOfCards: 0, editionDescription: '', editionImage: '' }
+  form.value = { editionId: '', editionName: '', numberOfCards: 0, editionDescription: '', editionImage: '', releaseDate: '' }
   formError.value = ''
   showForm.value = true
 }
@@ -65,14 +66,15 @@ const openEdit = (ed, event) => {
     editionName: ed.editionName || '',
     numberOfCards: ed.numberOfCards || 0,
     editionDescription: ed.editionDescription || '',
-    editionImage: '' // leave empty — only fill to replace with a new Drive file ID
+    editionImage: '', // leave empty — only fill to replace with a new Drive file ID
+    releaseDate: ed.releaseDate || ''
   }
   formError.value = ''
   showForm.value = true
 }
 
 const resetForm = () => {
-  form.value = { editionId: '', editionName: '', numberOfCards: 0, editionDescription: '', editionImage: '' }
+  form.value = { editionId: '', editionName: '', numberOfCards: 0, editionDescription: '', editionImage: '', releaseDate: '' }
   formError.value = ''
   editingId.value = null
   showForm.value = false
@@ -126,6 +128,10 @@ onMounted(fetchEditions)
         <div class="form-field">
           <label>Number of Cards</label>
           <input v-model.number="form.numberOfCards" type="number" min="0" />
+        </div>
+        <div class="form-field">
+          <label>Release Date (yyyy-mm-dd-hh)</label>
+          <input v-model="form.releaseDate" placeholder="2026-03-11-00" />
         </div>
         <div class="form-field">
           <label>{{ editingId ? 'New Image (Drive file ID — leave empty to keep current)' : 'Edition Image (Drive file ID — auto-pulled to R2)' }}</label>

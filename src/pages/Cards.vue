@@ -246,6 +246,68 @@ const visibleCards = computed(() => {
 })
 
 
+// ── Collapse duplicate names ──────────────────────────────────────────────────
+const collapseByName = ref(true)
+
+const editionReleaseMap = computed(() => {
+  const m = new Map()
+  editions.value.forEach(ed => m.set(ed.editionId, ed.releaseDate || ''))
+  return m
+})
+
+const collapsedCards = computed(() => {
+  const newest = new Map() // name.toLowerCase() -> winning card
+  visibleCards.value.forEach(card => {
+    const name = (card.name || '').toLowerCase()
+    if (!name) return
+    const existing = newest.get(name)
+    if (!existing) {
+      newest.set(name, card)
+    } else {
+      const edDate = editionReleaseMap.value.get(card.edition) || ''
+      const exDate = editionReleaseMap.value.get(existing.edition) || ''
+      if (edDate > exDate) newest.set(name, card)
+    }
+  })
+  const winnerIds = new Set([...newest.values()].map(c => c.id))
+  return visibleCards.value.filter(c => {
+    const name = (c.name || '').toLowerCase()
+    if (!name) return true
+    return winnerIds.has(c.id)
+  })
+})
+
+const displayedCards = computed(() =>
+  collapseByName.value ? collapsedCards.value : visibleCards.value
+)
+
+// ── Edition variants navigation (inside detail modal) ────────────────────────
+const sameNameCards = computed(() => {
+  if (!detailCard.value) return []
+  const name = (detailCard.value.name || '').toLowerCase()
+  if (!name) return []
+  return allMerged.value
+    .filter(c => (c.name || '').toLowerCase() === name)
+    .sort((a, b) => {
+      const da = editionReleaseMap.value.get(a.edition) || ''
+      const db = editionReleaseMap.value.get(b.edition) || ''
+      return db.localeCompare(da)
+    })
+})
+
+const editionVariantIdx = computed(() =>
+  sameNameCards.value.findIndex(c => c.id === detailCard.value?.id)
+)
+
+const prevEditionVariant = () => {
+  const i = editionVariantIdx.value
+  if (i > 0) { editingNameId.value = null; detailCard.value = sameNameCards.value[i - 1] }
+}
+const nextEditionVariant = () => {
+  const i = editionVariantIdx.value
+  if (i < sameNameCards.value.length - 1) { editingNameId.value = null; detailCard.value = sameNameCards.value[i + 1] }
+}
+
 // ── Available filter options (dynamic) ───────────────────────────────────────
 const availableSubs = computed(() => {
   const s = new Set(driveCards.value.map(c => c.sub_edition))
@@ -274,15 +336,15 @@ const openDetail = card => { detailCard.value = card; showDetail.value = true }
 const closeDetail = () => { showDetail.value = false; detailCard.value = null }
 
 const detailIndex = computed(() =>
-  detailCard.value ? visibleCards.value.findIndex(c => c.id === detailCard.value.id) : -1
+  detailCard.value ? displayedCards.value.findIndex(c => c.id === detailCard.value.id) : -1
 )
 const prevCard = () => {
   const i = detailIndex.value
-  if (i > 0) { editingNameId.value = null; detailCard.value = visibleCards.value[i - 1] }
+  if (i > 0) { editingNameId.value = null; detailCard.value = displayedCards.value[i - 1] }
 }
 const nextCard = () => {
   const i = detailIndex.value
-  if (i < visibleCards.value.length - 1) { editingNameId.value = null; detailCard.value = visibleCards.value[i + 1] }
+  if (i < displayedCards.value.length - 1) { editingNameId.value = null; detailCard.value = displayedCards.value[i + 1] }
 }
 const onModalKey = e => {
   if (!showDetail.value) return
@@ -313,11 +375,34 @@ const openCreate = (driveCard = null) => {
   editingMetaId.value = null
   form.value = blankForm()
   if (driveCard) {
-    form.value.edition       = driveCard.edition       || ''
+    form.value.edition       = driveCard.edition        || ''
     form.value.colorIdentity = driveCard.color_identity || ''
     form.value.cardNumber    = driveCard.number         ?? null
     form.value.cardName      = driveCard.name           || ''
     form.value.colors        = driveCard.color_identity ? [driveCard.color_identity] : []
+
+    // Prefill game-mechanics fields from existing meta card with the same name
+    if (driveCard.name) {
+      const nameLower = driveCard.name.toLowerCase()
+      const existing = metaCards.value.find(m => (m.cardName || '').toLowerCase() === nameLower)
+      if (existing) {
+        form.value.cardType          = existing.cardType          ?? form.value.cardType
+        form.value.strength          = existing.strength          ?? null
+        form.value.cost              = existing.cost              ?? null
+        form.value.level             = existing.level             ?? null
+        form.value.starter           = existing.starter           ?? false
+        form.value.cardClasses       = [...(existing.cardClasses  ?? [])]
+        form.value.regulation        = existing.regulation        ?? ''
+        form.value.specialCost       = existing.specialCost       ?? null
+        form.value.specialSummonKind = existing.specialSummonKind ?? null
+        form.value.requirement       = existing.requirement       ?? ''
+        form.value.rarity            = existing.rarity            ?? null
+        form.value.effects               = JSON.parse(JSON.stringify(existing.effects               ?? []))
+        form.value.inheritEffects        = JSON.parse(JSON.stringify(existing.inheritEffects        ?? []))
+        form.value.keywordEffects        = JSON.parse(JSON.stringify(existing.keywordEffects        ?? []))
+        form.value.inheritKeywordEffects = JSON.parse(JSON.stringify(existing.inheritKeywordEffects ?? []))
+      }
+    }
   }
   formError.value = ''
   driveCardPreview.value = null
@@ -653,10 +738,10 @@ const saveCardName = async (card) => {
 const renderCount = ref(40)
 
 const lazyCards = computed(() =>
-  visibleCards.value.slice(0, renderCount.value)
+  displayedCards.value.slice(0, renderCount.value)
 )
 
-watch(visibleCards, () => {
+watch(() => displayedCards.value, () => {
   renderCount.value = 40
 })
 
@@ -695,7 +780,6 @@ onMounted(async () => {
 watch([fEdition, fSubEdition], async () => {
   await cardsStore.loadCards(fEdition.value, fSubEdition.value)
 })
-
 
 // ── Lock page scroll when modals open ────────────────────────────────────────
 watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
@@ -920,6 +1004,14 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           </div>
 
           <div class="filter-group">
+            <label class="filter-label">Vista de cartas</label>
+            <div class="filter-mode-toggle">
+              <button class="mode-btn" :class="{ active: collapseByName }" @click="collapseByName = true">Colapsar repetidas</button>
+              <button class="mode-btn" :class="{ active: !collapseByName }" @click="collapseByName = false">Mostrar todas</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
             <label class="filter-label">Tamaño de cartas ({{ cardSize }}px)</label>
             <input class="filter-input" type="range" min="100" max="500" step="10" v-model="cardSize" />
           </div>
@@ -935,17 +1027,17 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
         <div v-if="loadingDrive && lazyCards.length === 0" class="cp-empty">
           Loading cards…
         </div>
-        <div v-else-if="visibleCards.length === 0" class="cp-empty">
+        <div v-else-if="displayedCards.length === 0" class="cp-empty">
           No se encontraron cartas{{ anyFilterActive ? ' para los filtros actuales' : '' }}.
         </div>
-        <div v-if="visibleCards.length > 0" class="cp-count">
-          {{ visibleCards.length }} carta{{ visibleCards.length !== 1 ? 's' : '' }}
+        <div v-if="displayedCards.length > 0" class="cp-count">
+          {{ displayedCards.length }} carta{{ displayedCards.length !== 1 ? 's' : '' }}
           <span v-if="anyFilterActive"> (filtradas)</span>
         </div>
 
         <!-- ── Card grid ───────────────────────────────────────────── -->
         <div
-          v-if="!loadingDrive && visibleCards.length > 0"
+          v-if="!loadingDrive && displayedCards.length > 0"
           class="card-grid"
           :style="gridStyle"
         >
@@ -1010,12 +1102,29 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               
                 <div class="modal-info-col">
                   <div class="modal-top-row">
-                    
-                    <div class="modal-badges">
-                      <span class="badge-edition">{{ detailCard.edition }}</span>
-                      <span v-if="detailCard.sub_edition" class="badge-sub">{{ subLabel(detailCard.sub_edition) }}</span>
-                      <span class="badge-num">#{{ detailCard.number }}</span>
-                      <span class="badge-color" :class="'badge-color--' + (detailCard.color_identity || '').toLowerCase()">{{ colorLabel(detailCard.color_identity) }}</span>
+                    <div class="modal-edition-nav">
+                      <button
+                        v-if="sameNameCards.length > 1"
+                        class="edition-nav-btn"
+                        :disabled="editionVariantIdx <= 0"
+                        @click="prevEditionVariant"
+                        title="Edición anterior"
+                      ><i class="bi bi-chevron-left"></i></button>
+
+                      <div class="modal-badges">
+                        <span class="badge-edition">{{ detailCard.edition }}</span>
+                        <span v-if="detailCard.sub_edition" class="badge-sub">{{ subLabel(detailCard.sub_edition) }}</span>
+                        <span class="badge-num">#{{ detailCard.number }}</span>
+                        <span class="badge-color" :class="'badge-color--' + (detailCard.color_identity || '').toLowerCase()">{{ colorLabel(detailCard.color_identity) }}</span>
+                      </div>
+
+                      <button
+                        v-if="sameNameCards.length > 1"
+                        class="edition-nav-btn"
+                        :disabled="editionVariantIdx >= sameNameCards.length - 1"
+                        @click="nextEditionVariant"
+                        title="Siguiente edición"
+                      ><i class="bi bi-chevron-right"></i></button>
                     </div>
                   </div>
 
@@ -1900,5 +2009,34 @@ input[type="range"]::-moz-range-thumb {
 .cards-load-trigger{
   height:20px;
   width:100%;
+}
+
+/* ── Edition navigation in detail modal ─────────────────────────────────── */
+.modal-edition-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.edition-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.edition-nav-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.edition-nav-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 </style>
