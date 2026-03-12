@@ -3,31 +3,15 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/store/login'
 import { useRouter } from 'vue-router'
+import { useHomeStore } from '@/store/home'
+
+const home = useHomeStore()
 
 
 const router = useRouter()
 
 const auth = useAuthStore()
 
-// ── Latest Set Banner ─────────────────────────────────────────────
-const latestSet = ref({
-})
-
-const selectedEdition = ref(null)
-
-// ── Top Decks ─────────────────────────────────────────────────────
-const topDecks = ref({
-  eventName: '',
-  eventUrl: '',
-  decks: [
-    { rank:1,name:'',author:'',description:'',cardImage:null,decklistUrl:'#',raw:null },
-    { rank:2,name:'',author:'',description:'',cardImage:null,decklistUrl:'#',raw:null },
-    { rank:3,name:'',author:'',description:'',cardImage:null,decklistUrl:'#',raw:null },
-    { rank:4,name:'',author:'',description:'',cardImage:null,decklistUrl:'#',raw:null },
-    { rank:5,name:'',author:'',description:'',cardImage:null,decklistUrl:'#',raw:null },
-    { rank:6,name:'',author:'',description:'',cardImage:null,decklistUrl:'#',raw:null },
-  ]
-})
 
 // ── Newsletter ────────────────────────────────────────────────────
 const newsItems = [
@@ -80,43 +64,6 @@ const fetchDecks = async () => {
 
   } catch (e) {
     console.error('Error loading decks', e)
-  }
-}
-
-// ── HOME API ──────────────────────────────────────────────────────
-const fetchHome = async () => {
-  try {
-
-    const { data } = await axios.get('/api/drive/front-content/home')
-
-    if (data.edition) {
-      selectedEdition.value = data.edition
-
-      latestSet.value.name = data.edition.editionName
-      latestSet.value.subtitle = data.edition.editionDescription || ''
-      latestSet.value.image = data.edition.editionImage
-    }
-
-    if (data.decks) {
-
-      data.decks.forEach((deck, i) => {
-
-        if (!deck) return
-
-        const slot = topDecks.value.decks[i]
-        if (!slot) return
-
-        slot.name = deck.deckName
-        slot.author = deck.username
-        slot.cardImage = deckCoverUrl(deck)
-        slot.raw = deck
-
-      })
-
-    }
-
-  } catch (e) {
-    console.error('Error loading home data', e)
   }
 }
 
@@ -192,7 +139,7 @@ onMounted(async () => {
 
   await fetchEditions()
   await fetchDecks()
-  await fetchHome()
+  await home.loadHome(cardMap.value)
 
 })
 
@@ -218,10 +165,10 @@ const deckLink = deck =>
 
       <!-- Latest Set Card -->
       <router-link
-        v-if="selectedEdition"
-        :to="{ path: '/cards', query: { edition: selectedEdition.editionId } }"
+        v-if="home.selectedEdition"
+        :to="{ path: '/cards', query: { edition: home.selectedEdition.editionId } }"
         class="hero-set-card"
-        :style="latestSet.image ? `background-image:url(${latestSet.image})` : ''"
+        :style="home.latestSet.image ? `background-image:url(${home.latestSet.image})` : ''"
       >
         <div class="hero-set-overlay">
 
@@ -239,11 +186,11 @@ const deckLink = deck =>
           </p>
 
           <h2 class="hero-title">
-            {{ latestSet.name }}
+            {{ home.latestSet.name }}
           </h2>
 
           <p class="hero-sub">
-            {{ latestSet.subtitle }}
+            {{ home.latestSet.subtitle }}
           </p>
 
         </div>
@@ -256,7 +203,7 @@ const deckLink = deck =>
 
 
         <router-link
-          v-for="deck in topDecks.decks.slice(0,6)"
+          v-for="deck in home.topDecks.decks.slice(0,6)"
           :to="deckLink(deck)"
           :key="deck.rank"
           class="hero-deck"

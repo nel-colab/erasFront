@@ -4,6 +4,15 @@ import axios from 'axios'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 
+import { useCardsStore } from '@/store/cards'
+
+const cardsStore = useCardsStore()
+
+const driveCards = computed(() => cardsStore.driveCards)
+const metaCards = computed(() => cardsStore.metaCards)
+const refData = computed(() => cardsStore.refData || {})
+
+
 const auth = useAuthStore()
 
 const sidebarOpen = ref(true)
@@ -23,20 +32,13 @@ const STRENGTH_MAX      = 15
 const SPECIAL_COST_MAX  = 5
 
 // ── Ref data (classes, instances, kinds, tags) ────────────────────────────────
-const refData = ref({ classes: [], instances: [], kinds: [], tags: [], instanceKinds: {}, keywordEffects: {} })
 
-const fetchRef = async () => {
-  try {
-    const { data } = await axios.get('/api/cards/ref')
-    refData.value = data
-  } catch { /* keep defaults */ }
-}
 
 const addTag = async (tag) => {
   try {
-    const { data } = await axios.post('/api/cards/ref/tags', { value: tag })
-    refData.value = data
-  } catch { /* ignore */ }
+    await axios.post('/api/cards/ref/tags', { value: tag })
+    await cardsStore.loadRef()
+  } catch {}
 }
 
 // ── Editions list (for filter dropdown) ──────────────────────────────────────
@@ -54,33 +56,11 @@ const sortEdId = (a, b) => {
 }
 
 // ── Drive cards (images db) ───────────────────────────────────────────────────
-const driveCards   = ref([])
 const loadingDrive = ref(false)
-const fetchDriveCards = async () => {
-  loadingDrive.value = true
-  try {
-    const p = new URLSearchParams()
-    if (fEdition.value)          p.set('edition',    fEdition.value)
-    if (fSubEdition.value !== null) p.set('subEdition', fSubEdition.value)
-    const { data } = await axios.get('/api/drive/cards/db?' + p)
-    driveCards.value = data.sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
-  } catch { driveCards.value = [] }
-  finally { loadingDrive.value = false }
-}
+
 
 // ── Metadata cards (cards collection) ────────────────────────────────────────
-const metaCards   = ref([])
 const loadingMeta = ref(false)
-const fetchMeta = async () => {
-  loadingMeta.value = true
-  try {
-    const p = new URLSearchParams()
-    if (fEdition.value) p.set('edition', fEdition.value)
-    const { data } = await axios.get('/api/cards/search' + (p.toString() ? '?' + p : ''))
-    metaCards.value = data
-  } catch { metaCards.value = [] }
-  finally { loadingMeta.value = false }
-}
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 const fEdition        = ref('')
@@ -143,8 +123,6 @@ const anyFilterActive = computed(() =>
      fStrengthMin.value > 0 || fStrengthMax.value < STRENGTH_MAX ||
      fSpecialCostMin.value > 0 || fSpecialCostMax.value < SPECIAL_COST_MAX))
 
-watch(anyFilterActive, v => { if (v) showWithoutMeta.value = false })
-watch([fEdition, fSubEdition], () => { fetchDriveCards(); fetchMeta() })
 
 const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize.value}px, 1fr))`
@@ -266,6 +244,7 @@ const visibleCards = computed(() => {
       return sortDir.value === 'asc' ? cmp : -cmp
     })
 })
+
 
 // ── Available filter options (dynamic) ───────────────────────────────────────
 const availableSubs = computed(() => {
@@ -412,7 +391,7 @@ const saveCard = async () => {
   try {
     if (editingMetaId.value) await axios.put(`/api/cards/${editingMetaId.value}`, payload)
     else                     await axios.post('/api/cards', payload)
-    await fetchMeta()
+    await cardsStore.loadCards(fEdition.value, fSubEdition.value)
     showCardForm.value = false
   } catch (e) {
     formError.value = e?.response?.data?.message || e.message || 'Failed to save'
@@ -637,35 +616,88 @@ const openKeywordEffectModal = (target = 'keywordEffects', idx = null) => {
 
 
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-// ── Inline name editing ────────────────────────────────────────────────────────
-const editingNameId    = ref(null)
+// ── Inline name editing ───────────────────────────────────────────────────────
+const editingNameId = ref(null)
 const editingNameValue = ref('')
 
 const startEditName = (card, event) => {
   event.stopPropagation()
-  editingNameId.value    = card.id
+  editingNameId.value = card.id
   editingNameValue.value = card.name
 }
 
 const saveCardName = async (card) => {
   const name = editingNameValue.value.trim()
   editingNameId.value = null
+
   if (!name || name === card.name) return
+
   try {
     await axios.patch(`/api/drive/cards/db/${card.id}/name`, { name })
+
     const dc = driveCards.value.find(c => c.id === card.id)
     if (dc) dc.name = name
-    if (detailCard.value?.id === card.id) detailCard.value = { ...detailCard.value, name }
-  } catch { /* ignore */ }
+
+    if (detailCard.value?.id === card.id) {
+      detailCard.value = { ...detailCard.value, name }
+    }
+
+  } catch {
+    // ignore
+  }
 }
 
-const route = useRoute()
-onMounted(() => {
-  if (route.query.edition) fEdition.value = route.query.edition
-  fetchEditions(); fetchDriveCards(); fetchMeta(); fetchRef()
+
+// ── Lazy rendering (performance) ─────────────────────────────────────────────
+
+const renderCount = ref(40)
+
+const lazyCards = computed(() =>
+  visibleCards.value.slice(0, renderCount.value)
+)
+
+watch(visibleCards, () => {
+  renderCount.value = 40
 })
 
+
+// ── Infinite scroll ──────────────────────────────────────────────────────────
+const loadMoreRef = ref(null)
+
+const observer = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) {
+    renderCount.value += 40
+  }
+})
+
+
+// ── Route + initial load ─────────────────────────────────────────────────────
+const route = useRoute()
+
+onMounted(async () => {
+  if (route.query.edition) {
+    fEdition.value = route.query.edition
+  }
+
+  await Promise.all([
+    fetchEditions(),
+    cardsStore.loadCards(fEdition.value, fSubEdition.value),
+    cardsStore.loadRef()
+  ])
+
+  if (loadMoreRef.value) {
+    observer.observe(loadMoreRef.value)
+  }
+})
+
+
+// ── Reload cards when filters change ─────────────────────────────────────────
+watch([fEdition, fSubEdition], async () => {
+  await cardsStore.loadCards(fEdition.value, fSubEdition.value)
+})
+
+
+// ── Lock page scroll when modals open ────────────────────────────────────────
 watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
   const anyOpen = d || f || e
   document.body.style.overflow = anyOpen ? 'hidden' : ''
@@ -900,7 +932,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
       <div class="cp-main">
 
         <!-- ── Status / count ─────────────────────────────────────── -->
-        <div v-if="loadingDrive" class="cp-empty">Loading cards…</div>
+        <div v-if="loadingDrive && lazyCards.length === 0" class="cp-empty">
+          Loading cards…
+        </div>
         <div v-else-if="visibleCards.length === 0" class="cp-empty">
           No se encontraron cartas{{ anyFilterActive ? ' para los filtros actuales' : '' }}.
         </div>
@@ -915,22 +949,29 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           class="card-grid"
           :style="gridStyle"
         >
-      <div
-        v-for="card in visibleCards"
-        :key="card.id"
-        class="card-item"
-        @click="openDetail(card)"
-      >
-        <div class="card-frame">
-          <img :src="card.image_url" :alt="card.name" class="card-img" loading="lazy" />
-          <div v-if="!card.meta" class="no-meta-badge">Sin  metadatos</div>
-        </div>
+          <div
+            v-for="card in lazyCards"
+            :key="card.id"
+            class="card-item"
+            @click="openDetail(card)"
+          >
+            <div class="card-frame">
+              <img
+                :src="card.image_url"
+                :alt="card.name"
+                class="card-img"
+                loading="lazy"
+                decoding="async"
+              />
+              <div v-if="!card.meta" class="no-meta-badge">Sin metadatos</div>
+            </div>
 
-        <div class="card-label">
-          <span class="card-name">{{ card.name }}</span>
+            <div class="card-label">
+              <span class="card-name">{{ card.name }}</span>
+            </div>
+          </div>
+          <div ref="loadMoreRef" class="cards-load-trigger"></div>
         </div>
-      </div>
-    </div>
 
       </div> <!-- /cp-main -->
     </div> <!-- /cp-body -->
@@ -1855,4 +1896,9 @@ input[type="range"]::-moz-range-thumb {
 .modal-box::-webkit-scrollbar-track { background: var(--card-bg); border-radius: 0 12px 12px 0; }
 .modal-box::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
 .modal-box::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.cards-load-trigger{
+  height:20px;
+  width:100%;
+}
 </style>

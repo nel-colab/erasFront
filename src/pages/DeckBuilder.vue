@@ -8,6 +8,12 @@ const auth   = useAuthStore()
 const canManageDecks = computed(() => auth.can('manage_decks'))
 const route  = useRoute()
 
+
+// ── Lazy render for search results ───────────────────────────────────────
+const renderCount = ref(60)     // how many cards render initially
+const LOAD_MORE = 40            // how many to add per scroll
+
+
 // ── Constants ─────────────────────────────────────────────────────────────
 const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
 const CARD_TYPES       = ['creature', 'utility', 'structure']
@@ -106,6 +112,10 @@ const searchResults = computed(() => {
     .filter(c => !fRarity.value.length || fRarity.value.includes(c.meta?.rarity))
     .filter(c => !fStarter.value || c.meta?.starter === true)
     .filter(c => !fEdition.value || c.edition === fEdition.value)
+})
+
+const visibleCards = computed(() => {
+  return searchResults.value.slice(0, renderCount.value)
 })
 
 // ── Selected card ─────────────────────────────────────────────────────────
@@ -324,6 +334,9 @@ const sortEdId = (a, b) => {
 
 onMounted(async () => {
   loadingCards.value = true
+
+  window.addEventListener('scroll', onScroll)
+
   try {
     const [driveRes, metaRes, edRes, refRes] = await Promise.all([
       axios.get('/api/drive/cards/db'),
@@ -331,16 +344,35 @@ onMounted(async () => {
       axios.get('/api/drive/editions'),
       axios.get('/api/cards/ref'),
     ])
+
     driveCards.value = driveRes.data.sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
     metaCards.value  = metaRes.data
     editions.value   = edRes.data.sort((a, b) => sortEdId(a.editionId, b.editionId))
     refData.value    = refRes.data
-  } catch (e) { console.error(e) }
-  finally { loadingCards.value = false }
+
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loadingCards.value = false
+  }
+
   if (route.query.id) {
     await loadDeck(route.query.id, route.query.copy)
   }
+})
 
+
+const onScroll = () => {
+  const scrollBottom =
+    window.innerHeight + window.scrollY >= document.body.offsetHeight - 400
+
+  if (scrollBottom && renderCount.value < searchResults.value.length) {
+    renderCount.value += LOAD_MORE
+  }
+}
+
+watch(searchResults, () => {
+  renderCount.value = 60
 })
 
 watch(deckEntries, () => {
@@ -348,6 +380,7 @@ watch(deckEntries, () => {
     deckImage.value = deckEntries.value[0]?.card.id ?? null
   }
 })
+
 </script>
 
 <template>
@@ -573,7 +606,7 @@ watch(deckEntries, () => {
       <div v-if="loadingCards" class="db-loading">Cargando…</div>
       <div v-else class="db-search-scroll">
         <div class="db-search-grid">
-          <div v-for="card in searchResults" :key="card.id"
+          <div v-for="card in visibleCards" :key="card.id"
             class="db-search-card"
             :class="{ 'db-search-card--selected': selectedCard?.id === card.id, 'db-search-card--maxed': countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS }"
             draggable="true"
