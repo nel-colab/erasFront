@@ -2,16 +2,20 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
-import { useAuthStore } from '@/store/login'
+import { useAuthStore }    from '@/store/login'
+import { useCardsStore }   from '@/store/cards'
+import { useEditionsStore } from '@/store/editions'
 
-const auth   = useAuthStore()
+const auth           = useAuthStore()
+const cardsStore     = useCardsStore()
+const editionsStore  = useEditionsStore()
 const canManageDecks = computed(() => auth.can('manage_decks'))
-const route  = useRoute()
+const route          = useRoute()
 
 
 // ── Lazy render for search results ───────────────────────────────────────
-const renderCount = ref(60)     // how many cards render initially
-const LOAD_MORE = 40            // how many to add per scroll
+const renderCount = ref(60)
+const LOAD_MORE   = 40
 
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -22,27 +26,33 @@ const LEVEL_MAX        = 12
 const SPECIAL_COST_MAX = 5
 const RARITIES         = ['C', 'UC', 'R', 'SR', 'SEC']
 
-// ── Card data ─────────────────────────────────────────────────────────────
-const driveCards   = ref([])
-const metaCards    = ref([])
-const editions     = ref([])
-const refData      = ref({ classes: [], keywordEffects: {} })
+// ── Card data (from store) ─────────────────────────────────────────────────
 const loadingCards = ref(false)
+
+const editions = computed(() => editionsStore.sorted)
+const refData  = computed(() => cardsStore.refData ?? { classes: [], keywordEffects: {} })
 
 const metaMap = computed(() => {
   const m = new Map()
-  metaCards.value.forEach(c => {
+  cardsStore.metaCards.forEach(c => {
     if (c.edition && c.cardNumber != null) m.set(c.edition + '|' + c.cardNumber, c)
   })
   return m
 })
 
 const allMerged = computed(() =>
-  driveCards.value.map(dc => ({
+  cardsStore.driveCards.map(dc => ({
     ...dc,
     meta: metaMap.value.get(dc.edition + '|' + dc.number) ?? null,
   }))
 )
+
+// ── Versioned image URL ────────────────────────────────────────────────────
+const cardImageUrl = card => {
+  if (!card?.image_url) return null
+  const ts = card.time_stamp ? new Date(card.time_stamp).getTime() : Date.now()
+  return `${card.image_url}?v=${ts}`
+}
 
 // ── Search / filter state ──────────────────────────────────────────────────
 const searchQuery      = ref('')
@@ -298,66 +308,55 @@ const renderCardKwEffect = ke => {
   return html
 }
 
-// ── Load existing deck ────────────────────────────────────────────────────
-const loadDeck = async (id, copy) => {
-  try {
-    const { data } = await axios.get(`/api/drive/decklists/${id}`)
-    
-    deckName.value = data.deckName ?? 'Mazo'
-    const countMap = {}
-    ;(data.cards ?? []).forEach(cId => { countMap[cId] = (countMap[cId] ?? 0) + 1 })
-    const entries = []
-    for (const [cId, count] of Object.entries(countMap)) {
-      const card = allMerged.value.find(c => c.id === cId)
-      if (card) entries.push({ card, count })
-    }
-    deckEntries.value = entries
-    savedState.value  = JSON.parse(JSON.stringify(entries))
-    deckImage.value = data.deckImage || (entries[0]?.card.id ?? null)
+// ── Resolve loaded deck data into local state ─────────────────────────────
+const resolveDeck = (data, copy) => {
+  deckName.value = data.deckName ?? 'Mazo'
+  const countMap = {}
+  ;(data.cards ?? []).forEach(cId => { countMap[cId] = (countMap[cId] ?? 0) + 1 })
+  const entries = []
+  for (const [cId, count] of Object.entries(countMap)) {
+    const card = allMerged.value.find(c => c.id === cId)
+    if (card) entries.push({ card, count })
+  }
+  deckEntries.value = entries
+  savedState.value  = JSON.parse(JSON.stringify(entries))
+  deckImage.value   = data.deckImage || (entries[0]?.card.id ?? null)
 
-    if (copy==='true') {
-      deckId.value = null
-      deckName.value += ' (copia)'
-      dirty.value = true
-    }else{
-      deckId.value   = data.id
-      dirty.value = false
-    }
-  } catch (e) { console.error('Error loading deck', e) }
-}
-
-const sortEdId = (a, b) => {
-  const sa = a.startsWith('ST'), sb = b.startsWith('ST')
-  if (sa && !sb) return -1; if (!sa && sb) return 1
-  return parseFloat(a.replace(/[^0-9.]/g, '')) - parseFloat(b.replace(/[^0-9.]/g, ''))
+  if (copy === 'true') {
+    deckId.value    = null
+    deckName.value += ' (copia)'
+    dirty.value     = true
+  } else {
+    deckId.value = data.id
+    dirty.value  = false
+  }
 }
 
 onMounted(async () => {
   loadingCards.value = true
-
   window.addEventListener('scroll', onScroll)
 
+  // Start deck fetch in parallel with card/edition loading
+  const deckPromise = route.query.id
+    ? axios.get(`/api/drive/decklists/${route.query.id}`).catch(() => null)
+    : Promise.resolve(null)
+
   try {
-    const [driveRes, metaRes, edRes, refRes] = await Promise.all([
-      axios.get('/api/drive/cards/db'),
-      axios.get('/api/cards/search'),
-      axios.get('/api/drive/editions'),
-      axios.get('/api/cards/ref'),
+    await Promise.all([
+      cardsStore.load(),
+      editionsStore.load(),
+      cardsStore.loadRef(),
     ])
-
-    driveCards.value = driveRes.data.sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
-    metaCards.value  = metaRes.data
-    editions.value   = edRes.data.sort((a, b) => sortEdId(a.editionId, b.editionId))
-    refData.value    = refRes.data
-
   } catch (e) {
     console.error(e)
   } finally {
     loadingCards.value = false
   }
 
-  if (route.query.id) {
-    await loadDeck(route.query.id, route.query.copy)
+  // Resolve deck entries — cards are guaranteed loaded now
+  const deckRes = await deckPromise
+  if (deckRes) {
+    resolveDeck(deckRes.data, route.query.copy)
   }
 })
 

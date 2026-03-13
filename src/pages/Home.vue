@@ -1,17 +1,25 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/store/login'
 import { useRouter } from 'vue-router'
 import { useHomeStore } from '@/store/home'
+import { useEditionsStore } from '@/store/editions'
+import { useDecksStore } from '@/store/decks'
+import { useCardsStore } from '@/store/cards'
 
-const home = useHomeStore()
-
+const home          = useHomeStore()
+const editionsStore = useEditionsStore()
+const decksStore    = useDecksStore()
+const cardsStore    = useCardsStore()
 
 const router = useRouter()
+const auth   = useAuthStore()
 
-const auth = useAuthStore()
-
+// ── Start loading immediately (before mount) ───────────────────────
+editionsStore.load()
+decksStore.load()
+home.loadHome()   // internally loads cardsStore first, then home content
 
 // ── Newsletter ────────────────────────────────────────────────────
 const newsItems = [
@@ -35,47 +43,19 @@ const newsItems = [
   },
 ]
 
-// ── Editions / Decks data ─────────────────────────────────────────
-const editions = ref([])
-const decks = ref([])
-const cardMap = ref({})
-
-const fetchEditions = async () => {
-  try {
-    const { data } = await axios.get('/api/drive/editions')
-    editions.value = data
-  } catch {
-    editions.value = []
-  }
-}
-
-const fetchDecks = async () => {
-  try {
-    const [decksRes, cardsRes] = await Promise.all([
-      axios.get(`/api/drive/decklists?publicDecks=true`),
-      axios.get('/api/drive/cards/db'),
-    ])
-
-    decks.value = decksRes.data
-
-    cardsRes.data.forEach(c => {
-      cardMap.value[c.id] = c.image_url
-    })
-
-  } catch (e) {
-    console.error('Error loading decks', e)
-  }
-}
+// ── Computed card map for deck cover images ───────────────────────
+const cardMap = computed(() => {
+  const m = {}
+  cardsStore.driveCards.forEach(c => { m[c.id] = c.image_url })
+  return m
+})
 
 // ── Modals ─────────────────────────────────────
 const showEditionModal = ref(false)
-const showDeckModal = ref(false)
+const showDeckModal    = ref(false)
+const deckSlotEditing  = ref(null)
 
-const deckSlotEditing = ref(null)
-
-const openEditionModal = () => {
-  showEditionModal.value = true
-}
+const openEditionModal = () => { showEditionModal.value = true }
 
 const openDeckModal = (rank) => {
   deckSlotEditing.value = rank
@@ -88,35 +68,23 @@ const selectEdition = ({ editionId }) => {
 }
 
 const selectDeck = (deck) => {
-
-  const slot = topDecks.value.decks.find(
-    d => d.rank === deckSlotEditing.value
-  )
-
+  const slot = home.topDecks.decks.find(d => d.rank === deckSlotEditing.value)
   if (slot) {
-    slot.name = deck.deckName
-    slot.author = deck.username
-    slot.cardImage = deckCoverUrl(deck)
-    slot.raw = deck
+    slot.name      = deck.deckName
+    slot.author    = deck.username
+    slot.cardImage = deck.deckImage ? (cardMap.value[deck.deckImage] ?? null) : null
+    slot.raw       = deck
   }
-
   showDeckModal.value = false
 }
-
-const deckCoverUrl = deck =>
-  deck.deckImage ? (cardMap.value[deck.deckImage] ?? null) : null
 
 // ── SAVE HOME ─────────────────────────────────
 const editMode = ref(false)
 
-const changeToEditMode = () => {
-  editMode.value = true
-}
+const changeToEditMode = () => { editMode.value = true }
 
 const saveHome = async () => {
-
   try {
-
     const payload = {
       edition: home.selectedEdition,
       decks: home.topDecks.decks.map((d, i) => ({
@@ -124,24 +92,12 @@ const saveHome = async () => {
         deck: d.raw
       }))
     }
-
     await axios.post('/api/drive/front-content/home', payload)
     editMode.value = false
-
   } catch (e) {
-    console.error("Error saving home", e)
+    console.error('Error saving home', e)
   }
-
 }
-
-// ── INIT ──────────────────────────────────────
-onMounted(async () => {
-
-  await fetchEditions()
-  await fetchDecks()
-  await home.loadHome(cardMap.value)
-
-})
 
 const deckLink = deck =>
   deck.raw ? `/deck-builder?id=${deck.raw.id}&copy=true` : '#'
@@ -272,7 +228,7 @@ const deckLink = deck =>
 
         <div class="modal-list">
           <div
-            v-for="ed in editions"
+            v-for="ed in editionsStore.sorted"
             :key="ed.editionId"
             class="modal-item"
             @click="selectEdition(ed)"
@@ -298,7 +254,7 @@ const deckLink = deck =>
         <div class="modal-list">
 
           <div
-            v-for="deck in decks"
+            v-for="deck in decksStore.publicDecks"
             :key="deck.id"
             class="modal-item"
             @click="selectDeck(deck)"
