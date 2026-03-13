@@ -780,7 +780,6 @@ const observer = new IntersectionObserver(entries => {
 const route = useRoute()
 
 onMounted(async () => {
-  window.location.reload(true)
   if (route.query.edition) {
     fEdition.value = route.query.edition
   }
