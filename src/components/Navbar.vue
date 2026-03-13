@@ -33,8 +33,7 @@ const doLogout = () => {
 }
 
 const refreshCards = async () => {
-  cardsStore.loaded = false
-  await cardsStore.loadCards(cardsStore.lastEdition)
+  await cardsStore.reload()
 }
 </script>
 
