@@ -1209,7 +1209,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             
               <div class="modal-img-col">
                 <div class="modal-frame">
-                  <img :src="cardImageUrl(card)" :alt="detailCard.name" class="modal-img" />
+                  <img :src="cardImageUrl(detailCard)" :alt="detailCard.name" class="modal-img" />
                 </div>
               </div>
 
