@@ -756,8 +756,13 @@ const saveCardName = async (card) => {
 // ── Lazy rendering (performance) ─────────────────────────────────────────────
 
 const cardImageUrl = (card) => {
-  if (!card.image_url) return null
-  return `${card.image_url}?t=${card.time_stamp}`
+  if (!card?.image_url) return null
+
+  const ts = card.time_stamp
+    ? new Date(card.time_stamp).getTime()
+    : Date.now()
+
+  return `${card.image_url}?v=${ts}`
 }
 
 
@@ -1209,7 +1214,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             
               <div class="modal-img-col">
                 <div class="modal-frame">
-                  <img :src="cardImageUrl(detailCard)" :alt="detailCard.name" class="modal-img" />
+                  <img :key="detailCard.id + detailCard.time_stamp"
+                       :src="cardImageUrl(detailCard)"
+                       :alt="detailCard.name" class="modal-img" />
                 </div>
               </div>
 
