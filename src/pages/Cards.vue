@@ -4,13 +4,15 @@ import axios from 'axios'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/login'
 
-import { useCardsStore } from '@/store/cards'
+import { useCardsStore }    from '@/store/cards'
+import { useEditionsStore } from '@/store/editions'
 
-const cardsStore = useCardsStore()
+const cardsStore    = useCardsStore()
+const editionsStore = useEditionsStore()
 
 const driveCards = computed(() => cardsStore.driveCards)
-const metaCards = computed(() => cardsStore.metaCards)
-const refData = computed(() => cardsStore.refData || {})
+const metaCards  = computed(() => cardsStore.metaCards)
+const refData    = computed(() => cardsStore.refData || {})
 
 
 const auth = useAuthStore()
@@ -41,19 +43,8 @@ const addTag = async (tag) => {
   } catch {}
 }
 
-// ── Editions list (for filter dropdown) ──────────────────────────────────────
-const editions = ref([])
-const fetchEditions = async () => {
-  try {
-    const { data } = await axios.get('/api/drive/editions')
-    editions.value = data.sort((a, b) => sortEdId(a.editionId, b.editionId))
-  } catch { editions.value = [] }
-}
-const sortEdId = (a, b) => {
-  const sa = a.startsWith('ST'), sb = b.startsWith('ST')
-  if (sa && !sb) return -1; if (!sa && sb) return 1
-  return parseFloat(a.replace(/[^0-9.]/g, '')) - parseFloat(b.replace(/[^0-9.]/g, ''))
-}
+// ── Editions list (from store) ────────────────────────────────────────────────
+const editions = computed(() => editionsStore.sorted)
 
 // ── Drive cards (images db) ───────────────────────────────────────────────────
 const loadingDrive = ref(false)
@@ -167,6 +158,14 @@ const visibleCards = computed(() => {
   const specCostFull    = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
 
   return allMerged.value
+    // Edition filter (client-side — store loads all editions)
+    .filter(c => !fEdition.value || c.edition === fEdition.value)
+    // Sub-edition filter
+    .filter(c => {
+      if (fSubEdition.value === null) return true
+      if (fSubEdition.value === '') return c.sub_edition === null || c.sub_edition === ''
+      return c.sub_edition === fSubEdition.value
+    })
     .filter(c => showWithoutMeta.value || c.meta !== null)
     // Name: regex, falls back to includes
     .filter(c => {
@@ -269,11 +268,7 @@ const visibleCards = computed(() => {
 // ── Collapse duplicate names ──────────────────────────────────────────────────
 const collapseByName = ref(true)
 
-const editionReleaseMap = computed(() => {
-  const m = new Map()
-  editions.value.forEach(ed => m.set(ed.editionId, ed.releaseDate || ''))
-  return m
-})
+const editionReleaseMap = computed(() => editionsStore.releaseMap)
 
 const collapsedCards = computed(() => {
   const newest = new Map() // name.toLowerCase() -> winning card
@@ -425,10 +420,11 @@ const openCreate = (driveCard = null) => {
     }
   }
   formError.value = ''
-  driveCardPreview.value = null
   showCardForm.value = true
   showDetail.value = false
-  if (driveCard?.name) lookupDriveCard()
+  // Use the drive card's own image directly (avoids wrong-card API lookup)
+  driveCardPreview.value = driveCard ? cardImageUrl(driveCard) : null
+  if (!driveCard && form.value.cardName) lookupDriveCard()
 }
 
 const openEdit = card => {
@@ -457,10 +453,10 @@ const openEdit = card => {
     inheritKeywordEffects:  JSON.parse(JSON.stringify(m?.inheritKeywordEffects ?? [])),
   }
   formError.value = ''
-  driveCardPreview.value = null
+  // Use the card's own image directly — edition+number already known
+  driveCardPreview.value = cardImageUrl(card)
   showCardForm.value = true
   showDetail.value = false
-  if (form.value.cardName) lookupDriveCard()
 }
 
 const toggleClass = cls => {
@@ -496,7 +492,7 @@ const saveCard = async () => {
   try {
     if (editingMetaId.value) await axios.put(`/api/cards/${editingMetaId.value}`, payload)
     else                     await axios.post('/api/cards', payload)
-    await cardsStore.loadCards(fEdition.value, fSubEdition.value)
+    await cardsStore.reload()
     showCardForm.value = false
   } catch (e) {
     formError.value = e?.response?.data?.message || e.message || 'Failed to save'
@@ -515,7 +511,17 @@ const lookupDriveCard = async () => {
     const p = new URLSearchParams({ name })
     if (form.value.edition) p.set('edition', form.value.edition)
     const { data } = await axios.get('/api/drive/cards/db?' + p)
-    driveCardPreview.value = data.length ? data[0].image_url : null
+    if (data.length) {
+      // Pick the card with the most recent timestamp
+      const best = data.reduce((a, b) => {
+        const ta = a.time_stamp ? new Date(a.time_stamp).getTime() : 0
+        const tb = b.time_stamp ? new Date(b.time_stamp).getTime() : 0
+        return tb > ta ? b : a
+      })
+      driveCardPreview.value = cardImageUrl(best)
+    } else {
+      driveCardPreview.value = null
+    }
   } catch {
     driveCardPreview.value = null
   } finally {
@@ -796,20 +802,14 @@ onMounted(async () => {
   }
 
   await Promise.all([
-    fetchEditions(),
-    cardsStore.loadCards(fEdition.value, fSubEdition.value),
-    cardsStore.loadRef()
+    editionsStore.load(),
+    cardsStore.load(),
+    cardsStore.loadRef(),
   ])
 
   if (loadMoreRef.value) {
     observer.observe(loadMoreRef.value)
   }
-})
-
-
-// ── Reload cards when filters change ─────────────────────────────────────────
-watch([fEdition, fSubEdition], async () => {
-  await cardsStore.loadCards(fEdition.value, fSubEdition.value)
 })
 
 // ── Lock page scroll when modals open ────────────────────────────────────────
@@ -1224,7 +1224,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 
             </div><!-- /form-with-preview -->
         </div>
-        <button class="modal-nav modal-nav--next" @click="nextCard" :disabled="detailIndex >= visibleCards.length - 1">
+        <button class="modal-nav modal-nav--next" @click="nextCard" :disabled="detailIndex >= displayedCards.length - 1">
           <i class="bi bi-chevron-right"></i>
         </button>
       </div>

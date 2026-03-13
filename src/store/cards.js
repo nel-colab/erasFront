@@ -7,35 +7,33 @@ export const useCardsStore = defineStore('cards', {
     driveCards: [],
     metaCards: [],
     refData: null,
-    loaded: false
+    loaded: false,
   }),
 
   actions: {
 
-    async loadCards(edition) {
-
-      if (this.loaded && this.lastEdition === edition) return
-
-      const p = new URLSearchParams()
-      if (edition) p.set('edition', edition)
-
+    async load() {
+      if (this.loaded) return
       const [driveRes, metaRes] = await Promise.all([
-        axios.get('/api/drive/cards/db?' + p),
-        axios.get('/api/cards/search?' + p)
+        axios.get('/api/drive/cards/db'),
+        axios.get('/api/cards/search'),
       ])
-
       this.driveCards = driveRes.data
-      this.metaCards = metaRes.data
-      this.lastEdition = edition
+      this.metaCards  = metaRes.data
       this.loaded = true
+    },
+
+    async reload() {
+      this.loaded = false
+      await this.load()
     },
 
     async loadRef() {
       if (this.refData) return
       const { data } = await axios.get('/api/cards/ref')
       this.refData = data
-    }
+    },
 
-  }
+  },
 
 })
