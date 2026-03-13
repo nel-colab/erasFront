@@ -1,17 +1,21 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { ref, computed } from 'vue'
+import { useRouter }      from 'vue-router'
+import { useDecksStore } from '@/store/decks'
+import { useAuthStore }  from '@/store/login'
 
-const router = useRouter()
+const router     = useRouter()
+const decksStore = useDecksStore()
+const auth       = useAuthStore()
 
-const decks    = ref([])
-const cardMap  = ref({})   // id → image_url
-const loading  = ref(true)
-const deleting = ref(null) // deck id being deleted
+const loading  = ref(false)
+const deleting = ref(null)
 
-const deckCoverUrl = deck =>
-  deck.deckImage ? (cardMap.value[deck.deckImage] ?? null) : null
+decksStore.loadPublic()
+
+const decks = computed(() => decksStore.publicDecks)
+
+const deckCoverUrl = deck => deck.deckImage ?? null
 
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
@@ -34,17 +38,6 @@ function sortVal(c) {
 
 const toggleSortDir = () => { sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc' }
 
-onMounted(async () => {
-  try {
-    const [decksRes, cardsRes] = await Promise.all([
-      axios.get(`/api/drive/decklists?publicDecks=true`),
-      axios.get('/api/drive/cards/db'),
-    ])
-    decks.value = decksRes.data
-    cardsRes.data.forEach(c => { cardMap.value[c.id] = c.image_url })
-  } catch (e) { console.error('Error loading decks', e) }
-  finally { loading.value = false }
-})
 
 const editDeck = deck => {
   router.push(`/deck-builder?id=${deck.id}&copy=true`)

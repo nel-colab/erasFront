@@ -5,10 +5,12 @@ import { useRoute } from 'vue-router'
 import { useAuthStore }    from '@/store/login'
 import { useCardsStore }   from '@/store/cards'
 import { useEditionsStore } from '@/store/editions'
+import { useDecksStore }   from '@/store/decks'
 
 const auth           = useAuthStore()
 const cardsStore     = useCardsStore()
 const editionsStore  = useEditionsStore()
+const decksStore     = useDecksStore()
 const canManageDecks = computed(() => auth.can('manage_decks'))
 const route          = useRoute()
 
@@ -170,21 +172,22 @@ const addToDeck = card => {
   }
   dirty.value = true
   selectedCard.value = card
-  if (!deckImage.value) deckImage.value = card.id
+  if (!deckImage.value) deckImage.value = cardImageUrl(card)
   
 }
 
 const removeFromDeck = cardId => {
   const idx = deckEntries.value.findIndex(e => e.card.id === cardId)
   if (idx === -1) return
-  if (deckEntries.value[idx].count > 1) deckEntries.value[idx].count--
+  const entry = deckEntries.value[idx]
+  if (entry.count > 1) entry.count--
   else deckEntries.value.splice(idx, 1)
   dirty.value = true
-  if (deckImage.value === cardId) deckImage.value = null
+  if (deckImage.value === cardImageUrl(entry.card)) deckImage.value = null
 }
 
-const makeDeckImage = cardId => {
-  deckImage.value = cardId
+const makeDeckImage = card => {
+  deckImage.value = cardImageUrl(card)
   dirty.value = true
 }
 
@@ -222,7 +225,8 @@ const saveDeck = async () => {
   if (!canManageDecks.value) return
   const cards     = deckEntries.value.flatMap(e => Array(e.count).fill(e.card.id))
   
-  const payload   = { deckName: deckName.value, cards, deckImage: deckImage.value, userId: auth.userId, username: auth.username , privateDeck: privateDeck.value }
+  // deckImage.value is already a URL — send directly, no card ID lookup needed
+  const payload   = { deckName: deckName.value, cards, deckImage: deckImage.value, userId: auth.userId, username: auth.username, privateDeck: privateDeck.value }
   saving.value = true
   try {
     if (deckId.value) {
@@ -233,6 +237,9 @@ const saveDeck = async () => {
     }
     savedState.value = JSON.parse(JSON.stringify(deckEntries.value))
     dirty.value = false
+    // Invalidate cached deck lists so MyDecks/PublicDecks refresh on next visit
+    decksStore.invalidateMine()
+    decksStore.invalidatePublic()
   } catch (e) { console.error('Error saving deck', e) }
   finally { saving.value = false }
 }
@@ -320,7 +327,8 @@ const resolveDeck = (data, copy) => {
   }
   deckEntries.value = entries
   savedState.value  = JSON.parse(JSON.stringify(entries))
-  deckImage.value   = data.deckImage || (entries[0]?.card.id ?? null)
+  // deckImage is now stored as a URL directly
+  deckImage.value   = data.deckImage || (entries[0]?.card ? cardImageUrl(entries[0].card) : null)
 
   if (copy === 'true') {
     deckId.value    = null
@@ -375,8 +383,10 @@ watch(searchResults, () => {
 })
 
 watch(deckEntries, () => {
-  if (!deckEntries.value.some(e => e.card.id === deckImage.value)) {
-    deckImage.value = deckEntries.value[0]?.card.id ?? null
+  if (!deckEntries.value.some(e => cardImageUrl(e.card) === deckImage.value)) {
+    deckImage.value = deckEntries.value[0]?.card
+      ? cardImageUrl(deckEntries.value[0].card)
+      : null
   }
 })
 
@@ -421,7 +431,7 @@ watch(deckEntries, () => {
 
         <!-- Image -->
         <div class="db-detail-img-wrap">
-          <img :src="selectedCard.image_url" :alt="selectedCard.name" class="db-detail-img" />
+          <img :src="cardImageUrl(selectedCard)" :alt="selectedCard.name" class="db-detail-img" />
         </div>
 
         <!-- Plain meta -->
@@ -548,14 +558,14 @@ watch(deckEntries, () => {
                 @click="selectCard(entry.card)"
                 @contextmenu.prevent="removeFromDeck(entry.card.id)">
 
-                <img :src="entry.card.image_url" :alt="entry.card.name" class="db-deck-img" />
+                <img :src="cardImageUrl(entry.card)" :alt="entry.card.name" class="db-deck-img" />
 
                 <!-- Deck image button (top-left) -->
                 <button
                   class="db-ctrl-btn-deck-image"
-                  :class="{ selected: deckImage === entry.card.id }"
-                  :disabled="deckImage === entry.card.id"
-                  @click.stop="makeDeckImage(entry.card.id)"
+                  :class="{ selected: deckImage === cardImageUrl(entry.card) }"
+                  :disabled="deckImage === cardImageUrl(entry.card)"
+                  @click.stop="makeDeckImage(entry.card)"
                 >
                   <i class="bi bi-image"></i>
                 </button>
@@ -612,7 +622,7 @@ watch(deckEntries, () => {
             @dragstart="onSearchDragStart(card, $event)"
             @click="selectCard(card)"
             @contextmenu.prevent="addToDeck(card)">
-            <img :src="card.image_url" :alt="card.name" class="db-search-img" />
+            <img :src="cardImageUrl(card)" :alt="card.name" class="db-search-img" />
             <span v-if="countInDeck(card.id) > 0" class="db-count-badge" :class="{ 'db-count-badge--max': countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS }">{{ countInDeck(card.id) }}</span>
             <button class="db-search-add" @click.stop="addToDeck(card)" :disabled="countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS" title="Añadir">+</button>
           </div>

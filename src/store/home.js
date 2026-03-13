@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import axios from 'axios'
-import { useCardsStore } from './cards'
 
 export const useHomeStore = defineStore('home', {
 
@@ -29,13 +28,6 @@ export const useHomeStore = defineStore('home', {
     async loadHome() {
       if (this.loaded) return
 
-      // Ensure cards are loaded so we can resolve deck cover images
-      const cardsStore = useCardsStore()
-      await cardsStore.load()
-
-      const cardMap = {}
-      cardsStore.driveCards.forEach(c => { cardMap[c.id] = c.image_url })
-
       const { data } = await axios.get('/api/drive/front-content/home')
 
       if (data.edition) {
@@ -53,7 +45,8 @@ export const useHomeStore = defineStore('home', {
           const slot = this.topDecks.decks[i]
           slot.name      = deck.deckName
           slot.author    = deck.username
-          slot.cardImage = deck.deckImage ? (cardMap[deck.deckImage] ?? null) : null
+          // deckImage is now stored as a URL directly — no card lookup needed
+          slot.cardImage = deck.deckImage ?? null
           slot.raw       = deck
         })
       }

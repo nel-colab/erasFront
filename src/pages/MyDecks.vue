@@ -1,17 +1,23 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
-import { useAuthStore } from '@/store/login'
+import { ref, computed } from 'vue'
+import { useRouter }     from 'vue-router'
+import axios             from 'axios'
+import { useAuthStore }  from '@/store/login'
+import { useDecksStore } from '@/store/decks'
 
-const auth   = useAuthStore()
-const router = useRouter()
+const auth       = useAuthStore()
+const decksStore = useDecksStore()
+const router     = useRouter()
 const canManageDecks = computed(() => auth.can('manage_decks'))
 
-const decks    = ref([])
-const cardMap  = ref({})   // id → image_url
-const loading  = ref(true)
-const deleting = ref(null) // deck id being deleted
+const loading  = ref(false)
+const deleting = ref(null)
+
+decksStore.loadMine(auth.userId)
+
+const decks = computed(() => decksStore.myDecks)
+
+const deckCoverUrl = deck => deck.deckImage ?? null
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
 const sortKey = ref('name')   // 'name' | 'username' | 'antiqueness'
@@ -36,20 +42,7 @@ const toggleSortDir = () => { sortDir.value = sortDir.value === 'asc' ? 'desc' :
 
 
 
-const deckCoverUrl = deck =>
-  deck.deckImage ? (cardMap.value[deck.deckImage] ?? null) : null
 
-onMounted(async () => {
-  try {
-    const [decksRes, cardsRes] = await Promise.all([
-      axios.get(`/api/drive/decklists?userId=${auth.userId}`),
-      axios.get('/api/drive/cards/db'),
-    ])
-    decks.value = decksRes.data
-    cardsRes.data.forEach(c => { cardMap.value[c.id] = c.image_url })
-  } catch (e) { console.error('Error loading decks', e) }
-  finally { loading.value = false }
-})
 
 const editDeck = deck => {
   router.push(`/deck-builder?id=${deck.id}`)
@@ -60,7 +53,7 @@ const deleteDeck = async deck => {
   deleting.value = deck.id
   try {
     await axios.delete(`/api/drive/decklists/${deck.id}`)
-    decks.value = decks.value.filter(d => d.id !== deck.id)
+    decksStore.removeMyDeck(deck.id)
   } catch (e) { console.error('Error deleting deck', e) }
   finally { deleting.value = null }
 }
