@@ -1,25 +1,28 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/store/login'
 import { useRouter } from 'vue-router'
-import { useHomeStore } from '@/store/home'
+import { useHomeStore }    from '@/store/home'
 import { useEditionsStore } from '@/store/editions'
-import { useDecksStore } from '@/store/decks'
-import { useCardsStore } from '@/store/cards'
+import { useDecksStore }    from '@/store/decks'
 
 const home          = useHomeStore()
 const editionsStore = useEditionsStore()
 const decksStore    = useDecksStore()
-const cardsStore    = useCardsStore()
 
 const router = useRouter()
 const auth   = useAuthStore()
 
-// ── Start loading immediately (before mount) ───────────────────────
-editionsStore.load()
-decksStore.load()
-home.loadHome()   // internally loads cardsStore first, then home content
+// ── Start loading immediately (before mount) ─────────────────────────────
+// cardsStore.load() is listed explicitly so it starts in parallel with the
+// others; home.loadHome() also calls it internally but the loaded-guard makes
+// the second call a no-op, so there is no duplicate request.
+Promise.all([
+  editionsStore.load(),
+  decksStore.loadPublic(),
+  home.loadHome(),
+])
 
 // ── Newsletter ────────────────────────────────────────────────────
 const newsItems = [
@@ -43,13 +46,6 @@ const newsItems = [
   },
 ]
 
-// ── Computed card map for deck cover images ───────────────────────
-const cardMap = computed(() => {
-  const m = {}
-  cardsStore.driveCards.forEach(c => { m[c.id] = c.image_url })
-  return m
-})
-
 // ── Modals ─────────────────────────────────────
 const showEditionModal = ref(false)
 const showDeckModal    = ref(false)
@@ -72,7 +68,7 @@ const selectDeck = (deck) => {
   if (slot) {
     slot.name      = deck.deckName
     slot.author    = deck.username
-    slot.cardImage = deck.deckImage ? (cardMap.value[deck.deckImage] ?? null) : null
+    slot.cardImage = deck.deckImage ?? null
     slot.raw       = deck
   }
   showDeckModal.value = false

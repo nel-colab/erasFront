@@ -1,37 +1,22 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/store/login'
+import { useAuthStore }    from '@/store/login'
+import { useEditionsStore } from '@/store/editions'
 
-const auth = useAuthStore()
+const auth           = useAuthStore()
+const editionsStore  = useEditionsStore()
 const canManageEditions = computed(() => auth.can('manage_editions'))
 const router = useRouter()
 
-// ── Edition metadata ──────────────────────────────────────────────────────────
-const editions = ref([])
+// ── Edition metadata (from store) ────────────────────────────────────────────
+const editions        = computed(() => editionsStore.sorted)
 const loadingEditions = ref(false)
-const editionsError = ref('')
+const editionsError   = ref('')
 
-const fetchEditions = async () => {
-  loadingEditions.value = true
-  editionsError.value = ''
-  try {
-    const { data } = await axios.get('/api/drive/editions')
-    editions.value = data.sort((a, b) => sortEditionId(a.editionId, b.editionId))
-  } catch (e) {
-    editionsError.value = e?.response?.data?.error || e.message || 'Failed to load editions'
-  } finally {
-    loadingEditions.value = false
-  }
-}
-
-const sortEditionId = (a, b) => {
-  const isStA = a.startsWith('ST'), isStB = b.startsWith('ST')
-  if (isStA && !isStB) return -1
-  if (!isStA && isStB) return 1
-  return parseFloat(a.replace(/[^0-9.]/g, '')) - parseFloat(b.replace(/[^0-9.]/g, ''))
-}
+// Load immediately — store guard prevents duplicate fetches
+editionsStore.load()
 
 const selectEdition = (edition) => {
   router.push({ path: '/cards', query: { edition: edition.editionId } })
@@ -90,15 +75,14 @@ const saveEdition = async () => {
   try {
     await axios.post('/api/drive/editions', { ...form.value })
     resetForm()
-    await fetchEditions()
+    editionsStore.invalidate()
+    await editionsStore.load()
   } catch (e) {
     formError.value = e?.response?.data?.error || e.message || 'Failed to save edition'
   } finally {
     saving.value = false
   }
 }
-
-onMounted(fetchEditions)
 </script>
 
 <template>
