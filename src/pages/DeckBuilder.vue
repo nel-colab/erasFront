@@ -281,7 +281,7 @@ const renderEffectHtml = ef => {
   const parts = []
   if (ef.instance) parts.push(escapeHtml(`<${ef.instance}>`))
   if (ef.ussageLimit === 'once per turn') parts.push('[once per turn]')
-  else if (ef.ussageLimit === 'once per turn between copies') parts.push('(1)')
+  else if (ef.ussageLimit === 'once per turn between copies') parts.push('[once per turn between copies]')
   else if (ef.ussageLimit === 'ultimate effect') parts.push('[ultimate]')
   ;(ef.effectBlocks ?? []).forEach(b => {
     const bKws = []; let s = ''

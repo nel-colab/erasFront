@@ -38,8 +38,7 @@ const applyOne = async (fileId) => {
     changes.value = changes.value.filter(c => c.id !== fileId)
 
     // 🔹 invalidate cards cache
-    cardsStore.loaded = false
-    await cardsStore.loadCards(cardsStore.lastEdition)
+    await cardsStore.reload()
 
     successMsg.value = `Change applied: ${fileId}`
   } catch (e) {
@@ -72,8 +71,7 @@ const applyAll = async () => {
     const { data } = await axios.post('/api/drive/staged/apply')
 
     // 🔹 invalidate cards cache
-    cardsStore.loaded = false
-    await cardsStore.loadCards(cardsStore.lastEdition)
+    await cardsStore.reload()
 
     successMsg.value = `Applied ${data.applied} change(s) successfully`
 

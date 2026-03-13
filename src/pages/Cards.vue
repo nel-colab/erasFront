@@ -347,19 +347,41 @@ const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'Whi
 // ── Detail modal ──────────────────────────────────────────────────────────────
 const detailCard = ref(null)
 const showDetail = ref(false)
-const openDetail = card => { detailCard.value = card; showDetail.value = true }
-const closeDetail = () => { showDetail.value = false; detailCard.value = null }
+
+// anchorCard tracks the card's position in displayedCards (the grid slot).
+// Edition-variant navigation changes detailCard but never anchorCard, so the
+// outer prev/next arrows keep navigating the grid at the original slot.
+const anchorCard = ref(null)
+
+const openDetail = card => {
+  anchorCard.value = card
+  detailCard.value = card
+  showDetail.value = true
+}
+const closeDetail = () => {
+  showDetail.value = false
+  detailCard.value = null
+  anchorCard.value = null
+}
 
 const detailIndex = computed(() =>
-  detailCard.value ? displayedCards.value.findIndex(c => c.id === detailCard.value.id) : -1
+  anchorCard.value ? displayedCards.value.findIndex(c => c.id === anchorCard.value.id) : -1
 )
 const prevCard = () => {
   const i = detailIndex.value
-  if (i > 0) { editingNameId.value = null; detailCard.value = displayedCards.value[i - 1] }
+  if (i > 0) {
+    editingNameId.value = null
+    anchorCard.value = displayedCards.value[i - 1]
+    detailCard.value = displayedCards.value[i - 1]
+  }
 }
 const nextCard = () => {
   const i = detailIndex.value
-  if (i < displayedCards.value.length - 1) { editingNameId.value = null; detailCard.value = displayedCards.value[i + 1] }
+  if (i < displayedCards.value.length - 1) {
+    editingNameId.value = null
+    anchorCard.value = displayedCards.value[i + 1]
+    detailCard.value = displayedCards.value[i + 1]
+  }
 }
 const onModalKey = e => {
   if (!showDetail.value) return
@@ -651,7 +673,7 @@ const renderEffectHtml = (ef) => {
   const parts = []
   if (ef.instance) parts.push(escapeHtml(`<${ef.instance}>`))
   if (ef.ussageLimit === 'once per turn') parts.push('[Una vez por turno]')
-  else if (ef.ussageLimit === 'once per turn between copies') parts.push('(1)')
+  else if (ef.ussageLimit === 'once per turn between copies') parts.push('[once per turn between copies]')
   else if (ef.ussageLimit === 'ultimate effect') parts.push('[Efecto definitivo]')
   ;(ef.effectBlocks ?? []).forEach(b => {
     const blockKws = []
@@ -1326,7 +1348,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             </div>
 
 
-            <div class="form-field">
+            <div class="form-field form-field--full">
               <label>Requerimiento</label>
               <input v-model="form.requirement" />
             </div>
