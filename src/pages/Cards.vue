@@ -2147,11 +2147,13 @@ input[type="range"]::-moz-range-thumb {
 :deep(.multiselect__option) {
   background: #121314;
   color: #e5e7eb;
+  font-weight: 400;
 }
 
 :deep(.multiselect__option--highlight) {
-  background: #3b82f6;
+  background: #1e1e1e;
   color: white;
+  font-weight: 700;
 }
 
 :deep(.multiselect__option--selected) {
@@ -2192,5 +2194,8 @@ input[type="range"]::-moz-range-thumb {
   overflow-y: auto;
 }
 
-
+:deep(.multiselect__option--selected.multiselect__option--highlight) {
+  background: #1e1e1e;
+  color: white;
+}
 </style>
