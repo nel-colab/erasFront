@@ -158,7 +158,7 @@ const changeDeckPrivacy = () => {
 const countInDeck = cardId => deckCountMap.value[cardId] ?? 0
 
 const MAX_COPIES = 4
-const MAX_CARDS = 50
+const MAX_CARDS = 100
 
 const addToDeck = card => {
   const existing = deckEntries.value.find(e => e.card.id === card.id)
@@ -511,7 +511,7 @@ watch(deckEntries, () => {
         <div class="db-mid-actions">
           <div class="db-save-group">
             <button class="btn-filled" @click="saveDeck"
-              :disabled="!canManageDecks || saving || !dirty"
+              :disabled="!canManageDecks || saving || !dirty || deckEntries.length === 0"
               :title="!canManageDecks ? 'Necesitas el permiso manage_decks para guardar' : ''">
               {{ saving ? 'Guardando…' : 'Guardar' }}
             </button>
@@ -529,7 +529,7 @@ watch(deckEntries, () => {
         </div>
       </div>
 
-      <div class="db-deck-count">{{ totalCards }} de 50 cartas</div>
+      <div class="db-deck-count">{{ totalCards }}</div>
 
       <!-- Drop zone + grid -->
       <div class="db-deck-scroll"

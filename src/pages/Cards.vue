@@ -21,7 +21,7 @@ const sidebarOpen = ref(true)
 
 // ── Constants (hardcoded by game rules) ───────────────────────────────────────
 const CARD_TYPES   = ['creature', 'utility', 'structure']
-const CARD_TYPE_ES = { creature: 'Criatura', utility: 'Utilitaria', structure: 'Estructura' }
+const CARD_TYPE_ES = { creature: 'Criatura', utility: 'Utilidad', structure: 'Estructura' }
 const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
 const SS_KINDS     = ['materialization', 'promotion', 'ritual', 'evolution']
 const SS_KIND_ES   = { materialization: 'Materialización', promotion: 'Ascenso', ritual: 'Ritual', evolution: 'Evolución' }
@@ -63,7 +63,6 @@ const fSubEdition     = ref(null)   // null = all, '' = MAIN, '1'/'2'/… = SUBn
 const fName           = ref('')
 const fType           = ref('')
 const fStarter        = ref(false)
-const showWithoutMeta = ref(true)
 const cardSize        = ref(200) // px, for responsive grid
 const fCostMin        = ref(0)
 const fCostMax        = ref(COST_MAX)
@@ -168,7 +167,7 @@ const visibleCards = computed(() => {
       if (fSubEdition.value === '') return c.sub_edition === null || c.sub_edition === ''
       return c.sub_edition === fSubEdition.value
     })
-    .filter(c => showWithoutMeta.value || c.meta !== null)
+    .filter(c => auth.can('manage_cards') || c.meta !== null)
     // Name: regex, falls back to includes
     .filter(c => {
       if (!fName.value) return true
@@ -673,12 +672,15 @@ const resolveTokensHtml = (text, collectedKws) => {
   )
 }
 
+const COLOR_NAMES = { B: 'Azúl', G: 'Verde', P: 'Violeta', R: 'Rojo', W: 'Blanco' }
+const mapColors = (colors) => (colors ?? []).map(c => COLOR_NAMES[c] ?? c)
+
 const renderEffectHtml = (ef) => {
   const parts = []
   if (ef.instance) parts.push(escapeHtml(`<${ef.instance}>`))
-  if (ef.ussageLimit === 'once per turn') parts.push('[Una vez por turno]')
-  else if (ef.ussageLimit === 'once per turn between copies') parts.push('[once per turn between copies]')
-  else if (ef.ussageLimit === 'ultimate effect') parts.push('[Efecto definitivo]')
+  if (ef.ussageLimit === 'once per turn') parts.push('[una vez por turno]')
+  else if (ef.ussageLimit === 'once per turn between copies') parts.push('[una vez por turno] entre copias,')
+  else if (ef.ussageLimit === 'ultimate effect') parts.push('[efecto definitivo]')
   ;(ef.effectBlocks ?? []).forEach(b => {
     const blockKws = []
     let s = ''
@@ -1055,11 +1057,6 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           </div>
 
 
-          <div class="filter-group filter-group--row">
-            <input type="checkbox" v-model="showWithoutMeta" :disabled="anyFilterActive" class="filter-check" />
-            <label class="filter-label" :class="{ muted: anyFilterActive }">Cartas sin metadatos</label>
-          </div>
-
           <div class="filter-group">
             <label class="filter-label">Vista de cartas</label>
             <div class="filter-mode-toggle">
@@ -1200,7 +1197,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                       <div class="meta-row" v-if="detailCard.meta.specialCost != null"><span class="meta-k">Coste Especial</span><span class="meta-v">{{ detailCard.meta.specialCost }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">Método de Invocación Especial</span><span class="meta-v">{{ SS_KIND_ES[detailCard.meta.specialSummonKind] ?? detailCard.meta.specialSummonKind }}</span></div>
                       <div class="meta-row" v-if="detailCard.meta.rarity"><span class="meta-k">Rareza</span><span class="meta-v">{{ detailCard.meta.rarity }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.colors?.length"><span class="meta-k">Colores</span><span class="meta-v">{{ detailCard.meta.colors.join(', ') }}</span></div>
+                      <div class="meta-row" v-if="detailCard.meta.colors?.length"><span class="meta-k">Colores</span><span class="meta-v">{{ mapColors(detailCard.meta.colors).join(', ') }}</span></div>
                       <div class="meta-row meta-row--full" v-if="detailCard.meta.requirement"><span class="meta-k">Requerimiento</span><span class="meta-v">{{ detailCard.meta.requirement }}</span></div>
                     </div>
 
