@@ -923,6 +923,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               :clear-on-select="false"
               placeholder="Todos"
               class="custom-multiselect"
+              selectLabel="Presiona aqui para seleccionar"
+              deselectLabel="Presiona aqui para quitar"
+              selectedLabel="Seleccionado"
             />
           </div>
 
@@ -1057,6 +1060,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               :clear-on-select="false"
               :preserve-search="true"
               placeholder="Todos"
+              selectLabel="Presiona aqui para seleccionar"
+              deselectLabel="Presiona aqui para quitar"
+              selectedLabel="Seleccionado"
             />
           </div>
 
@@ -1072,6 +1078,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               :clear-on-select="false"
               :preserve-search="true"
               placeholder="Todos"
+              selectLabel="Presiona aqui para seleccionar"
+              deselectLabel="Presiona aqui para quitar"
+              selectedLabel="Seleccionado"
             />
           </div>
 
