@@ -7,6 +7,10 @@ import { useAuthStore } from '@/store/login'
 import { useCardsStore }    from '@/store/cards'
 import { useEditionsStore } from '@/store/editions'
 
+
+import Multiselect from "vue-multiselect"
+import "vue-multiselect/dist/vue-multiselect.css"
+
 const cardsStore    = useCardsStore()
 const editionsStore = useEditionsStore()
 
@@ -910,11 +914,16 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <!-- Clases -->
           <div v-if="classes.length" class="filter-group">
             <label class="filter-label">Clases</label>
-            <div class="filter-chips">
-              <button v-for="cl in classes" :key="cl" class="chip"
-                :class="{ active: fClases.includes(cl) }"
-                @click="fClases = fClases.includes(cl) ? fClases.filter(x => x !== cl) : [...fClases, cl]">{{ cl }}</button>
-            </div>
+
+            <Multiselect
+              v-model="fClases"
+              :options="classes"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              placeholder="Todos"
+              class="custom-multiselect"
+            />
           </div>
 
           <!-- Coste -->
@@ -1039,21 +1048,31 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
           <!-- Keywords effects -->
           <div v-if="availableKeywordEffects.length" class="filter-group">
             <label class="filter-label">Efectos Keyword</label>
-            <div class="filter-chips">
-              <button v-for="kw in availableKeywordEffects" :key="kw" class="chip"
-                :class="{ active: fKeywordEffects.includes(kw) }"
-                @click="fKeywordEffects = fKeywordEffects.includes(kw) ? fKeywordEffects.filter(x => x !== kw) : [...fKeywordEffects, kw]">{{ kw }}</button>
-            </div>
+
+            <Multiselect
+              v-model="fKeywordEffects"
+              :options="availableKeywordEffects"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              :preserve-search="true"
+              placeholder="Todos"
+            />
           </div>
 
           <!-- Tags de efectos -->
           <div v-if="availableTags.length" class="filter-group">
             <label class="filter-label">Tags de efectos</label>
-            <div class="filter-chips">
-              <button v-for="t in availableTags" :key="t" class="chip"
-                :class="{ active: fEffectTags.includes(t) }"
-                @click="fEffectTags = fEffectTags.includes(t) ? fEffectTags.filter(x => x !== t) : [...fEffectTags, t]">{{ t }}</button>
-            </div>
+
+            <Multiselect
+              v-model="fEffectTags"
+              :options="availableTags"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              :preserve-search="true"
+              placeholder="Todos"
+            />
           </div>
 
 
@@ -1674,9 +1693,16 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
 .filter-sidebar--open { width: 420px; }
 
 .filter-sidebar-inner {
-  background: #121314; border: 1px solid #2a2a2a; border-radius: 10px;
-  padding: 0.9rem 1rem;
-  display: flex; flex-direction: column; gap: 1rem;
+  background: #121314;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 0.9rem 1rem 7rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
 }
 
 .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
@@ -2093,4 +2119,69 @@ input[type="range"]::-moz-range-thumb {
   opacity: 0.25;
   cursor: default;
 }
+
+:deep(.multiselect__tags) {
+  background: #121314;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+}
+
+:deep(.multiselect__content-wrapper) {
+  background: #121314;
+  border: 1px solid #374151;
+  position: fixed;
+  z-index: 9999;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+:deep(.multiselect__option) {
+  background: #121314;
+  color: #e5e7eb;
+}
+
+:deep(.multiselect__option--highlight) {
+  background: #3b82f6;
+  color: white;
+}
+
+:deep(.multiselect__option--selected) {
+  background: #121314;
+  color: #9ca3af;
+}
+
+:deep(.multiselect__tag) {
+  background: #256328;
+  color: white;
+}
+
+:deep(.multiselect__input) {
+  background: #121314;
+  color: white;
+}
+
+:deep(.multiselect__input::placeholder) {
+  color: #9ca3af;
+}
+
+:deep(.multiselect__content-wrapper) {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+:deep(.multiselect) {
+  position: relative;
+}
+
+:deep(.multiselect__content-wrapper) {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+
 </style>
