@@ -9,12 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vueform/multiselect": "^2.6.11",
     "axios": "^1.13.6",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "pinia": "^3.0.4",
     "sweetalert2": "^11.26.21",
     "vue": "^3.5.29",
+    "vue-multiselect": "^3.4.0",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
