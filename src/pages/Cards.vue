@@ -39,7 +39,9 @@ const SPECIAL_COST_MAX  = 5
 const addTag = async (tag) => {
   try {
     await axios.post('/api/cards/ref/tags', { value: tag })
-    await cardsStore.loadRef()
+    if (cardsStore.refData && !cardsStore.refData.tags.includes(tag)) {
+      cardsStore.refData.tags.push(tag)
+    }
   } catch {}
 }
 
@@ -337,9 +339,11 @@ const availableTypes = computed(() =>
 const availableSpecialSummons = computed(() =>
   [...new Set(metaCards.value.map(c => c.specialSummonKind).filter(Boolean))].sort())
 
-const classes                = computed(() => refData.value.classes ?? [])
-const availableKeywordEffects = computed(() => Object.keys(refData.value.keywordEffects ?? {}))
-const availableTags          = computed(() => refData.value.tags ?? [])
+const classes                = computed(() => (refData.value.classes ?? []).slice().sort())
+const availableInstances     = computed(() => (refData.value.instances ?? []).slice().sort())
+const availableKinds         = computed(() => (refData.value.kinds ?? []).slice().sort())
+const availableKeywordEffects = computed(() => Object.keys(refData.value.keywordEffects ?? {}).sort())
+const availableTags          = computed(() => (refData.value.tags ?? []).slice().sort())
 
 const subLabel   = s => s === null || s === '' ? 'MAIN' : `SUB${s}`
 const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'White' }[c] ?? c)
@@ -1111,9 +1115,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               <div v-if="!card.meta" class="no-meta-badge">Sin metadatos</div>
             </div>
 
-            <div class="card-label">
-              <span class="card-name">{{ card.name }}</span>
-            </div>
+
           </div>
           <div ref="loadMoreRef" class="cards-load-trigger"></div>
         </div>
@@ -1359,11 +1361,11 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             </div>
 
             <!-- Classes multi-select -->
-            <div class="form-field full" v-if="refData.classes.length">
+            <div class="form-field full" v-if="classes.length">
               <label>Clases</label>
               <div class="chip-select">
                 <button
-                  v-for="cls in refData.classes" :key="cls"
+                  v-for="cls in classes" :key="cls"
                   type="button"
                   class="chip"
                   :class="{ active: form.cardClasses.includes(cls) }"
@@ -1472,7 +1474,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               <label>Instancia</label>
               <select v-model="effectForm.instance">
                 <option :value="null">— ninguna —</option>
-                <option v-for="inst in refData.instances" :key="inst" :value="inst">{{ inst }}</option>
+                <option v-for="inst in availableInstances" :key="inst" :value="inst">{{ inst }}</option>
               </select>
             </div>
 
@@ -1489,16 +1491,16 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <div class="form-field">
               <label>Naturaleza *</label>
               <select v-model="effectForm.kind">
-                <option v-for="k in refData.kinds" :key="k" :value="k">{{ k }}</option>
+                <option v-for="k in availableKinds" :key="k" :value="k">{{ k }}</option>
               </select>
             </div>
 
             <!-- Tags -->
             <div class="form-field full">
               <label>Tags</label>
-              <div class="chip-select" v-if="refData.tags.length">
+              <div class="chip-select" v-if="availableTags.length">
                 <button
-                  v-for="tag in refData.tags" :key="tag"
+                  v-for="tag in availableTags" :key="tag"
                   type="button"
                   class="chip"
                   :class="{ active: effectForm.tags.includes(tag) }"
@@ -1539,12 +1541,12 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                 </div>
 
                 <!-- Inline keyword inserter -->
-                <div class="form-field" style="grid-column: 1 / -1;" v-if="Object.keys(refData.keywordEffects).length">
+                <div class="form-field" style="grid-column: 1 / -1;" v-if="availableKeywordEffects.length">
                   <div class="block-kw-add">
                     <select v-model="blockKwPickers[i].keyword"
                       @change="blockKwPickers[i].number = null">
                       <option :value="null">— insertar keyword —</option>
-                      <option v-for="k in Object.keys(refData.keywordEffects)" :key="k" :value="k">{{ k }}</option>
+                      <option v-for="k in availableKeywordEffects" :key="k" :value="k">{{ k }}</option>
                     </select>
                     <input v-if="blockKwPlaceholder(i)" v-model="blockKwPickers[i].number"
                       :placeholder="`${blockKwPlaceholder(i)} value`" class="block-kw-num" />
@@ -1602,7 +1604,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
               <label>Keyword</label>
               <select v-model="keywordEffectForm.keyword">
                 <!-- keywordEffects is now a map; iterate over its keys -->
-                <option v-for="k in Object.keys(refData.keywordEffects || {})" :key="k" :value="k">{{ k }}</option>
+                <option v-for="k in availableKeywordEffects" :key="k" :value="k">{{ k }}</option>
               </select>
 
             </div>
