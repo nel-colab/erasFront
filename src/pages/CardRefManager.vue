@@ -22,7 +22,7 @@ const busy     = ref({})
 
 // ── Effect modal for keyword effects ──────────────────────────────────────────
 const showEffectModal  = ref(false)
-const editingEffectIdx = ref(null)        // null = new
+const editingKeyword   = ref(null)        // null = new, string = editing existing
 const newTagInput      = ref('')
 
 const blankEffect = () => ({
@@ -40,19 +40,21 @@ const filtered = computed(() => {
     const q = searches.value[f.key].toLowerCase()
     if (f.key === 'keywordEffects') {
       const effects = refData.value[f.key] || {}
-      result[f.key] = q
+      const keys = q
         ? Object.keys(effects).filter(k => {
             const effect = effects[k]
-            return k.toLowerCase().includes(q) || 
-              (effect && (effect.effect ? effectSummary(effect.effect).toLowerCase().includes(q) : 
+            return k.toLowerCase().includes(q) ||
+              (effect && (effect.effect ? effectSummary(effect.effect).toLowerCase().includes(q) :
                (effect.description && effect.description.toLowerCase().includes(q)) ||
                (effect.parameter && effect.parameter.toLowerCase().includes(q))))
           })
         : Object.keys(effects)
+      result[f.key] = keys.slice().sort((a, b) => a.localeCompare(b))
     } else {
-      result[f.key] = q
+      const arr = q
         ? (refData.value[f.key] ?? []).filter(v => v.toLowerCase().includes(q))
         : (refData.value[f.key] ?? [])
+      result[f.key] = arr.slice().sort((a, b) => a.localeCompare(b))
     }
   })
   return result
@@ -91,10 +93,30 @@ const fetchRef = async () => {
   }
 }
 
+const openEditEffect = (keyword) => {
+  const existing = refData.value.keywordEffects?.[keyword]
+  if (!existing) return
+  const ef = existing.effect ?? existing
+  effectForm.value = {
+    keywordName: keyword,
+    placeholder: { name: ef.placeholder?.name ?? '' },
+    instance: ef.instance ?? null,
+    ussageLimit: ef.ussageLimit ?? null,
+    kind: ef.kind ?? null,
+    tags: Array.isArray(ef.tags) ? [...ef.tags] : [],
+    effectBlocks: Array.isArray(ef.effectBlocks) && ef.effectBlocks.length
+      ? ef.effectBlocks.map(b => ({ ...b }))
+      : [{ activationCondition: '', cost: '', resolution: '' }],
+  }
+  editingKeyword.value = keyword
+  showEffectModal.value = true
+}
+
 const addItem = async (field) => {
   if (field === 'keywordEffects') {
     // Open effect modal for keyword effects
     effectForm.value = blankEffect()
+    editingKeyword.value = null
     showEffectModal.value = true
     return
   }
@@ -221,11 +243,16 @@ const saveEffect = async () => {
   }
   busy.value['keywordEffects_add'] = true
   try {
+    // If renaming an existing keyword, delete the old entry first
+    if (editingKeyword.value && editingKeyword.value !== finalKeyword) {
+      await axios.delete('/api/cards/ref/keywordEffects', { data: { keyword: editingKeyword.value } })
+    }
     const { data } = await axios.post('/api/cards/ref/keywordEffects', { keyword: finalKeyword, effect })
     refData.value = data
     showEffectModal.value = false
+    editingKeyword.value = null
   } catch (e) {
-    errors.value.keywordEffects = e?.response?.data?.error || e.message || 'Failed to add keyword effect'
+    errors.value.keywordEffects = e?.response?.data?.error || e.message || 'Failed to save keyword effect'
   } finally {
     busy.value['keywordEffects_add'] = false
   }
@@ -286,7 +313,6 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
   <div class="ref-page">
     <div class="ref-header">
       <h2>Card Reference Data</h2>
-      <p class="ref-subtitle">Manage the vocabulary lists used in the card editor.</p>
     </div>
 
     <div v-if="loading" class="ref-loading">Loading…</div>
@@ -368,6 +394,14 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
               <option v-for="k in refData.kinds" :key="k" :value="k">{{ k }}</option>
             </select>
 
+            <!-- Edit button — only for keyword effects -->
+            <button
+              v-if="f.key === 'keywordEffects'"
+              class="item-edit"
+              @click="openEditEffect(item)"
+              title="Edit"
+            >✎</button>
+
             <button
               class="item-delete"
               :disabled="busy[f.key + '_' + item]"
@@ -441,10 +475,10 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
     <!-- Effect sub-modal for keyword effects                              -->
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <Teleport to="body">
-      <div v-if="showEffectModal" class="modal-overlay modal-overlay--nested" @click.self="showEffectModal = false">
+      <div v-if="showEffectModal" class="modal-overlay modal-overlay--nested" @click.self="showEffectModal = false; editingKeyword = null">
         <div class="modal-box modal-box--effect">
-          <button class="modal-close" @click="showEffectModal = false">✕</button>
-          <h3 class="modal-form-title">Create Keyword Effect</h3>
+          <button class="modal-close" @click="showEffectModal = false; editingKeyword = null">✕</button>
+          <h3 class="modal-form-title">{{ editingKeyword ? 'Edit Keyword Effect' : 'Create Keyword Effect' }}</h3>
 
           <div class="form-grid">
             <!-- Keyword Name -->
@@ -548,9 +582,9 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
           <div class="form-actions">
             <button class="btn-filled" @click="saveEffect"
               :disabled="!effectForm.keywordName.trim() || busy['keywordEffects_add']">
-              {{ busy['keywordEffects_add'] ? 'Saving…' : 'Create Keyword Effect' }}
+              {{ busy['keywordEffects_add'] ? 'Saving…' : editingKeyword ? 'Save Changes' : 'Create Keyword Effect' }}
             </button>
-            <button class="btn-ghost" @click="showEffectModal = false">Cancel</button>
+            <button class="btn-ghost" @click="showEffectModal = false; editingKeyword = null">Cancel</button>
           </div>
         </div>
       </div>
@@ -726,18 +760,20 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
 .instance-kind-select:focus { border-color: #3f51b5; color: var(--text-primary); }
 .instance-kind-select option { background: var(--card-bg); }
 
+.item-edit,
 .item-delete {
   flex-shrink: 0;
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   cursor: pointer;
   padding: 0.15rem 0.3rem;
   border-radius: 3px;
   transition: color 0.15s, background 0.15s;
-  margin-left: 0.4rem;
+  margin-left: 0.3rem;
 }
+.item-edit:hover { color: #3f51b5; background: rgba(63, 81, 181, 0.1); }
 .item-delete:hover:not(:disabled) { color: #f44336; background: rgba(244, 68, 68, 0.1); }
 .item-delete:disabled { opacity: 0.3; cursor: not-allowed; }
 
@@ -745,15 +781,17 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: flex; align-items: center; justify-content: center;
-  z-index: 1000; padding: 1rem;
+  z-index: 2000; padding: 1rem;
 }
 .modal-box {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow);
   border-radius: 12px;
-  width: 100%; max-width: 520px; max-height: 80vh; overflow-y: auto;
+  width: 100%; max-width: 520px;
+  max-height: 90vh; overflow-y: auto;
   padding: 1.5rem; position: relative;
+  margin-top: 4rem;
 }
 .modal-close {
   position: absolute; top: 0.9rem; right: 1rem;
@@ -810,7 +848,7 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
 .btn-danger-filled:hover:not(:disabled) { background-color: #991b1b !important; color: #fff !important; }
 
 /* Effect modal styles */
-.modal-box--effect { max-width: 1480px; margin-top: 4rem; max-height: fit-content;}
+.modal-box--effect { max-width: 1480px; }
 
 .form-with-preview {
   display: flex;
