@@ -41,7 +41,7 @@ function cambiarSeccion(seccion){
         :class="{active: seccionActual==='tipos'}"
         @click.prevent="cambiarSeccion('tipos')"
       >
-        Tipos de carta
+        Definiciones
       </a>
 
       <a
@@ -117,7 +117,7 @@ function cambiarSeccion(seccion){
 
             <ul>
               <li>
-                Al realizar una invocacion esecial o por efecto
+                Al realizar una <b>invocacion especial</b> o por efecto
                 <b>antes</b> de cualquier accion o habilidad 
                 <b> roba 1 carta</b>.
               </li>
@@ -147,8 +147,9 @@ function cambiarSeccion(seccion){
         <div class="col-md-3">
 
           <p>
-            <b>Utilidad:</b> Cartas que generan efectos inmediatos
-            o modifican el estado del juego.
+            <b>Utilidad:</b> Cartas que generan efectos inmediatos, respuestas
+            o modifican el estado del juego. Si esta carta es volteada
+            desde tus vidas se puede o ser llevada a tu mano.
           </p>
 
         </div>
@@ -157,7 +158,9 @@ function cambiarSeccion(seccion){
 
           <p>
             <b>Estructuras:</b> Cartas que permanecen en el campo
-            generando efectos continuos.
+            generando efectos continuos. Solo puedes jugar 1 estrucutra 
+            por turno pagando su coste en gemas. Si esta carta es volteada
+            desde tus vidas se puede jugar en tu campo.
           </p>
 
         </div>
@@ -198,40 +201,53 @@ function cambiarSeccion(seccion){
         <div class="col-md-6">
           <p>
             <b>Tributos:</b> Zona donde se colocan cartas usadas
-            como coste o eliminadas por efectos del juego.
+            como coste o son eviadas por efectos del juego.
           </p>
         </div>
 
         <div class="col-md-6">
           <p>
-            <b>Descarte:</b> Zona donde se envían cartas utilizadas
-            o destruidas durante la partida.
+            <b>Descarte:</b> Zona donde se colocan utilidades usadas
+            o cartas que son eviadas por efectos del juego.
+            Si una criatura es destruido por enfrentamiento o un efecto rival
+            va a esta zona sin pasar por los tributos.
           </p>
         </div>
 
         <div class="col-md-6">
           <p>
-            <b>Retaguardia:</b> Zona donde se colocan criaturas
-            invocadas pagando su coste o mediante efectos especiales.
+            <b>Línea frontal:</b> Es la zona donde tus criaturas se enfrentan directamente 
+            con las del oponente. Desde aquí pueden declarar ataques, bloquear criaturas 
+            enemigas y usar efectos que las afecten. Sin embargo, al estar en primera línea 
+            también quedan expuestas a los efectos de las criaturas rivales.
           </p>
         </div>
 
         <div class="col-md-6">
           <p>
-            <b>Criaturas:</b> Cartas invocadas para atacar,
-            defender o activar habilidades.
+            <b>Retaguardia:</b> A diferencia de la línea frontal, las criaturas en la 
+            retaguardia están protegidas del oponente. Desde aquí no pueden declarar 
+            ataques, bloquear criaturas enemigas ni afectarlas con sus efectos. 
+            Esta zona también es donde se juegan las estructuras y utilidades.
           </p>
         </div>
 
         <div class="col-md-6">
           <p>
-            <b>Vidas:</b> Cada jugador parte con <b>6 cartas de vida</b>
-            cara abajo, cuando es atacado a las vidas la primera de la pila se revela,
-            esta puede ser jugada pero no asi invocada. En caso es una criatura
-            se compara la fuerza con la de la criatura atacante, si es menor o 
-            igual esta se tributa, en caso contrario <b> irse </b> al fondo de las vidas 
-            boca arriba (reforzar tus vidas). En cualquier otro caso la carta se va a la mano.
+            <b>Vidas:</b> Al comenzar la partida, cada jugador coloca 6 cartas 
+            del tope de su mazo boca abajo en la sección de vidas, formando una pila.
+            Estas cartas representan tus vidas. Si en algún momento te quedas sin vidas, pierdes la partida inmediatamente.
           </p>
+            <p> La forma más común de perder vidas es a través de ataques.</p>
+           <p> Cuando un jugador declara un ataque, el oponente sigue estos pasos:</p>
+           <ul>
+            <li> <b>1.</b> Si es una utilidad o estructura: puede jugarla inmediatamente sin pagar su coste o añadirla a su mano.</li>
+            <li> <b>2.</b> Si es una criatura: compara su fuerza con la de la criatura atacante:</li>
+              <ol><b>2.1</b> Si tiene más fuerza: puede añadirla a su mano o reforzar, colocándola boca arriba al fondo de sus vidas. 
+                (Solo puede reforzar si la criatura fue revelada por un ataque).</ol>
+              <ol><b>2.2</b> Si tiene menos fuerza: debe tributarla.</ol>
+           </ul>
+
         </div>
 
       </div>
@@ -334,8 +350,6 @@ letter-spacing:1px;
 font-size:0.9rem;
 line-height:1.45;
 padding:15px 10px;
-border-top:1px solid #ddd;
-border-bottom:1px solid #ddd;
 }
 
 .tipos-title{
@@ -365,7 +379,6 @@ margin-bottom:3px;
 font-size:0.9rem;
 line-height:1.45;
 padding:15px 10px;
-border-bottom:1px solid #ddd;
 }
 
 .definiciones-title{
@@ -646,9 +659,10 @@ border-right:none;
 
 .breadcrumb a.active{
 
-background:#9EEB62;
+background:#2a5274;
 
 font-weight:600;
 
 }
+
 </style>
