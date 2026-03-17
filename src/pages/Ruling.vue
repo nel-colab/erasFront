@@ -41,7 +41,7 @@ function cambiarSeccion(seccion){
         :class="{active: seccionActual==='tipos'}"
         @click.prevent="cambiarSeccion('tipos')"
       >
-        Definiciones
+        Tipos de carta
       </a>
 
       <a
