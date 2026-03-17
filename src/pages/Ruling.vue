@@ -41,7 +41,7 @@ function cambiarSeccion(seccion){
         :class="{active: seccionActual==='tipos'}"
         @click.prevent="cambiarSeccion('tipos')"
       >
-        Tipos de carta
+        Definiciones
       </a>
 
       <a
@@ -49,7 +49,7 @@ function cambiarSeccion(seccion){
         :class="{active: seccionActual==='definiciones'}"
         @click.prevent="cambiarSeccion('definiciones')"
       >
-        Definiciones
+        Tipos de cartas
       </a>
 
       <a
@@ -57,11 +57,11 @@ function cambiarSeccion(seccion){
         :class="{active: seccionActual==='tablero'}"
         @click.prevent="cambiarSeccion('tablero')"
       >
-        Tablero
+        Zonas de juego 
       </a>
 
     </div>
-
+ 
   </div>
 </div>
 
