@@ -57,7 +57,7 @@ function cambiarSeccion(seccion){
         :class="{active: seccionActual==='tablero'}"
         @click.prevent="cambiarSeccion('tablero')"
       >
-        Tablero
+        Zonas de juego 
       </a>
 
     </div>
