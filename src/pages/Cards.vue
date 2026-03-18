@@ -796,11 +796,10 @@ const saveCardName = async (card) => {
 const deletingCard = ref(false)
 
 async function deleteCardImage(card) {
-  if (!confirm(`¿Eliminar la imagen y el registro de "${card.name}"? Esta acción también eliminará los metadatos si existen.`)) return
+  if (!confirm(`¿Eliminar solo la imagen de "${card.name}"? Los metadatos se conservarán.`)) return
   deletingCard.value = true
   try {
     await axios.delete(`/api/drive/cards/db/${card.id}`)
-    if (card.meta) await axios.delete(`/api/cards/${card.meta.id}`).catch(() => {})
     closeDetail()
     await cardsStore.reload()
   } catch {
@@ -811,16 +810,30 @@ async function deleteCardImage(card) {
 }
 
 async function deleteCardMeta(card) {
-  if (!confirm(`¿Eliminar los metadatos de "${card.name}"? La imagen permanecerá.`)) return
+  if (!confirm(`¿Eliminar solo los metadatos de "${card.name}"? La imagen permanecerá.`)) return
   deletingCard.value = true
   try {
     await axios.delete(`/api/cards/${card.meta.id}`)
     await cardsStore.reload()
-    // refresh detailCard meta
     const updated = cardsStore.driveCards.find(c => c.id === card.id)
     if (updated) detailCard.value = updated
   } catch {
     alert('Error al eliminar los metadatos.')
+  } finally {
+    deletingCard.value = false
+  }
+}
+
+async function deleteCardBoth(card) {
+  if (!confirm(`¿Eliminar imagen Y metadatos de "${card.name}"? Esta acción no se puede deshacer.`)) return
+  deletingCard.value = true
+  try {
+    await axios.delete(`/api/drive/cards/db/${card.id}`)
+    if (card.meta) await axios.delete(`/api/cards/${card.meta.id}`).catch(() => {})
+    closeDetail()
+    await cardsStore.reload()
+  } catch {
+    alert('Error al eliminar la carta.')
   } finally {
     deletingCard.value = false
   }
@@ -1288,11 +1301,10 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                   </template>
 
                   <div class="modal-actions" v-if="auth.can('manage_cards')">
-                    <template v-if="detailCard.meta">
-                      <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Editar</button>
-                      <button class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardMeta(detailCard)">Eliminar metadatos</button>
-                    </template>
+                    <button v-if="detailCard.meta" class="btn-filled btn-sm" @click="openEdit(detailCard)">Editar</button>
+                    <button v-if="detailCard.meta" class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardMeta(detailCard)">Eliminar metadatos</button>
                     <button class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardImage(detailCard)">Eliminar imagen</button>
+                    <button class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardBoth(detailCard)">Eliminar todo</button>
                   </div>
                 </div>
 
