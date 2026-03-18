@@ -56,9 +56,6 @@ const editions = computed(() => editionsStore.sorted)
 const loadingDrive = ref(false)
 
 
-// ── Metadata cards (cards collection) ────────────────────────────────────────
-const loadingMeta = ref(false)
-
 // ── Filters ───────────────────────────────────────────────────────────────────
 const fEdition        = ref('')
 const fColors         = ref([...COLOR_IDENTITIES])  // included colors; all = no filter
@@ -824,6 +821,19 @@ async function deleteCardMeta(card) {
   }
 }
 
+async function deleteMetaCard(metaCard) {
+  if (!confirm(`¿Eliminar los metadatos de "${metaCard.cardName}"? La imagen permanecerá.`)) return
+  deletingCard.value = true
+  try {
+    await axios.delete(`/api/cards/${metaCard.id}`)
+    await cardsStore.reload()
+  } catch {
+    alert('Error al eliminar los metadatos.')
+  } finally {
+    deletingCard.value = false
+  }
+}
+
 async function deleteCardBoth(card) {
   if (!confirm(`¿Eliminar imagen Y metadatos de "${card.name}"? Esta acción no se puede deshacer.`)) return
   deletingCard.value = true
@@ -892,9 +902,142 @@ onMounted(async () => {
   }
 })
 
+// ── Meta list modal ───────────────────────────────────────────────────────────
+const showMetaList = ref(false)
+const mlSortKey = ref('cardNumber')
+const mlSortDir = ref('asc')
+function mlSort(key) {
+  if (mlSortKey.value === key) mlSortDir.value = mlSortDir.value === 'asc' ? 'desc' : 'asc'
+  else { mlSortKey.value = key; mlSortDir.value = 'asc' }
+}
+
+// Map drive cards by the same composite key so we can look up images for meta cards
+// Maps composite key → array of drive cards (multiple when duplicates exist)
+const driveCardsByKey = computed(() => {
+  const m = new Map()
+  driveCards.value.forEach(dc => {
+    const k = buildCardKey(dc.edition, dc.number, dc.sub_edition, dc.color_identity)
+    if (!m.has(k)) m.set(k, [])
+    m.get(k).push(dc)
+  })
+  return m
+})
+
+// Returns the single drive card for a meta card's key, or null if 0 or 2+ matches
+function uniqueDriveCard(card) {
+  const matches = driveCardsByKey.value.get(
+    buildCardKey(card.edition, card.cardNumber, card.subEdition, card.colorIdentity)
+  )
+  return matches?.length === 1 ? matches[0] : null
+}
+
+const metaListCards = computed(() => {
+  const costFull     = fCostMin.value === 0 && fCostMax.value === COST_MAX
+  const levelFull    = fLevelMin.value === 0 && fLevelMax.value === LEVEL_MAX
+  const strengthFull = fStrengthMin.value === 0 && fStrengthMax.value === STRENGTH_MAX
+  const specCostFull = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
+  const allColors    = fColors.value.length === COLOR_IDENTITIES.length
+
+  return metaCards.value
+    .filter(c => !fEdition.value || c.edition === fEdition.value)
+    .filter(c => {
+      if (fSubEdition.value === null) return true
+      if (fSubEdition.value === '') return !c.subEdition
+      return c.subEdition === fSubEdition.value
+    })
+    .filter(c => {
+      if (!fName.value) return true
+      const name = c.cardName ?? ''
+      try { return new RegExp(fName.value, 'i').test(name) }
+      catch { return name.toLowerCase().includes(fName.value.toLowerCase()) }
+    })
+    .filter(c => !fType.value || c.cardType?.toLowerCase() === fType.value.toLowerCase())
+    .filter(c => {
+      if (allColors) return true
+      const colorsToCheck = [...new Set([c.colorIdentity, ...(c.colors ?? [])].filter(Boolean))]
+      if (!colorsToCheck.length) return true
+      return colorsToCheck.some(col => fColors.value.includes(col))
+    })
+    .filter(c => !fClases.value.length || c.cardClasses?.some(cl => fClases.value.includes(cl)))
+    .filter(c => {
+      if (costFull) return true
+      const v = c.cost
+      if (v == null) return true
+      return v >= fCostMin.value && v <= fCostMax.value
+    })
+    .filter(c => {
+      if (levelFull) return true
+      const v = c.level
+      if (v == null) return true
+      return v >= fLevelMin.value && v <= fLevelMax.value
+    })
+    .filter(c => {
+      const v = c.strength
+      if (v == null) return true
+      if (strengthFull) return true
+      return v >= fStrengthMin.value && v <= fStrengthMax.value
+    })
+    .filter(c => {
+      if (specCostFull) return true
+      const v = c.specialCost
+      if (v == null) return false
+      return v >= fSpecialCostMin.value && v <= fSpecialCostMax.value
+    })
+    .filter(c => !fSpecialSummon.value || c.specialSummonKind === fSpecialSummon.value)
+    .filter(c => {
+      if (!fRequirement.value) return true
+      try { return new RegExp(fRequirement.value, 'i').test(c.requirement ?? '') }
+      catch { return (c.requirement ?? '').toLowerCase().includes(fRequirement.value.toLowerCase()) }
+    })
+    .filter(c => {
+      if (!fCardNumber.value) return true
+      const num = String(c.cardNumber ?? '')
+      try { return new RegExp(fCardNumber.value, 'i').test(num) }
+      catch { return num.includes(fCardNumber.value) }
+    })
+    .filter(c => !fRarity.value.length || fRarity.value.includes(c.rarity))
+    .filter(c => !fStarter.value || c.starter === true)
+    .filter(c => {
+      if (!fKeywordEffects.value.length) return true
+      const kwList = [...(c.keywordEffects ?? []), ...(c.inheritKeywordEffects ?? [])]
+      const effList = [...(c.effects ?? []), ...(c.inheritEffects ?? [])]
+      return fKeywordEffects.value.some(kw => {
+        if (kwList.some(ke => ke.keyword === kw)) return true
+        return effList.some(eff =>
+          (eff.effectBlocks ?? []).some(b =>
+            [b.activationCondition, b.cost, b.resolution].some(t => t?.toLowerCase().includes(kw.toLowerCase()))
+          )
+        )
+      })
+    })
+    .filter(c => {
+      if (!fEffectTags.value.length) return true
+      const effList = [...(c.effects ?? []), ...(c.inheritEffects ?? [])]
+      return effList.some(eff => eff.tags?.some(t => fEffectTags.value.includes(t)))
+    })
+    .sort((a, b) => {
+      let va, vb
+      switch (mlSortKey.value) {
+        case 'cardName':      va = (a.cardName ?? '').toLowerCase();            vb = (b.cardName ?? '').toLowerCase(); break
+        case 'edition':       va = (a.edition ?? '').toLowerCase();             vb = (b.edition ?? '').toLowerCase(); break
+        case 'cardType':      va = (a.cardType ?? '').toLowerCase();            vb = (b.cardType ?? '').toLowerCase(); break
+        case 'cost':          va = a.cost          ?? Infinity;                 vb = b.cost          ?? Infinity; break
+        case 'level':         va = a.level         ?? Infinity;                 vb = b.level         ?? Infinity; break
+        case 'strength':      va = a.strength      ?? Infinity;                 vb = b.strength      ?? Infinity; break
+        case 'rarity':        va = (a.rarity ?? '').toLowerCase();              vb = (b.rarity ?? '').toLowerCase(); break
+        case 'colorIdentity': va = (a.colorIdentity ?? '').toLowerCase();       vb = (b.colorIdentity ?? '').toLowerCase(); break
+        case 'starter':       va = a.starter ? 0 : 1;                          vb = b.starter ? 0 : 1; break
+        default:              va = a.cardNumber ?? Infinity;                    vb = b.cardNumber ?? Infinity
+      }
+      if (va === vb) return 0
+      const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb
+      return mlSortDir.value === 'asc' ? cmp : -cmp
+    })
+})
+
 // ── Lock page scroll when modals open ────────────────────────────────────────
-watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
-  const anyOpen = d || f || e
+watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) => {
+  const anyOpen = d || f || e || m
   document.body.style.overflow = anyOpen ? 'hidden' : ''
 })
 
@@ -997,6 +1140,7 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
             <label class="filter-label">
               Nivel<span v-if="fLevelMin > 0 || fLevelMax < LEVEL_MAX"> ({{ fLevelMin }}–{{ fLevelMax }})</span><span v-else> (Todos)</span>
             </label>
+            
             <div class="dual-range"
               :style="{ '--pct-min': (fLevelMin / LEVEL_MAX * 100) + '%', '--pct-max': (fLevelMax / LEVEL_MAX * 100) + '%' }">
               <div class="dual-range-track"></div>
@@ -1163,6 +1307,9 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
         <div v-if="displayedCards.length > 0" class="cp-count">
           {{ displayedCards.length }} carta{{ displayedCards.length !== 1 ? 's' : '' }}
           <span v-if="anyFilterActive"> (filtradas)</span>
+          <button class="btn-ghost btn-sm" style="margin-left:0.75rem" @click="showMetaList = true">
+            <i class="bi bi-table"></i> Ver lista de metadatos ({{ metaListCards.length }})
+          </button>
         </div>
 
         <!-- ── Card grid ───────────────────────────────────────────── -->
@@ -1709,6 +1856,83 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
       </div>
     </Teleport>
 
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- Meta list modal                                                    -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <Teleport to="body">
+      <div v-if="showMetaList" class="modal-overlay" @click.self="showMetaList = false">
+        <div class="modal-box modal-box--meta-list">
+          <button class="modal-close" @click="showMetaList = false">✕</button>
+          <h3 class="modal-form-title">
+            Metadatos de cartas
+            <span class="meta-list-count">{{ metaListCards.length }} carta{{ metaListCards.length !== 1 ? 's' : '' }}</span>
+          </h3>
+
+          <div v-if="metaListCards.length === 0" class="cp-empty">No hay cartas con metadatos para los filtros actuales.</div>
+
+          <div v-else class="meta-list-table-wrap">
+            <table class="meta-list-table">
+              <thead>
+                <tr>
+                  <th>Imagen</th>
+                  <th class="ml-sortable" @click="mlSort('cardName')">Nombre <i :class="mlSortKey==='cardName' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('edition')">Edición <i :class="mlSortKey==='edition' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('cardNumber')"># <i :class="mlSortKey==='cardNumber' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('cardType')">Tipo <i :class="mlSortKey==='cardType' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('cost')">Coste <i :class="mlSortKey==='cost' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('level')">Nivel <i :class="mlSortKey==='level' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('strength')">Fuerza <i :class="mlSortKey==='strength' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th>Clases</th>
+                  <th class="ml-sortable" @click="mlSort('rarity')">Rareza <i :class="mlSortKey==='rarity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('colorIdentity')">Color <i :class="mlSortKey==='colorIdentity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('starter')">Iniciador <i :class="mlSortKey==='starter' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th v-if="auth.can('manage_cards')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="card in metaListCards"
+                  :key="card.id"
+                  class="meta-list-row"
+                  @click="(() => { const dc = uniqueDriveCard(card); if (dc) { showMetaList = false; openDetail({ ...dc, meta: card }) } })()"
+                >
+                  <td class="meta-list-img-cell">
+                    <img
+                      v-if="uniqueDriveCard(card)"
+                      :src="cardImageUrl(uniqueDriveCard(card))"
+                      :alt="card.cardName"
+                      class="meta-list-thumb"
+                      @error="e => e.target.replaceWith(Object.assign(document.createElement('span'), { className: 'meta-list-no-img', textContent: 'Sin imagen' }))"
+                    />
+                    <span v-else class="meta-list-no-img">Sin imagen</span>
+                  </td>
+                  <td>{{ card.cardName }}</td>
+                  <td>{{ card.edition }}{{ card.subEdition ? ' · ' + subLabel(card.subEdition) : '' }}</td>
+                  <td>{{ card.cardNumber }}</td>
+                  <td>{{ CARD_TYPE_ES[card.cardType] ?? card.cardType ?? '—' }}</td>
+                  <td>{{ card.cost ?? '—' }}</td>
+                  <td>{{ card.level ?? '—' }}</td>
+                  <td>{{ card.strength ?? '—' }}</td>
+                  <td>{{ card.cardClasses?.join(', ') || '—' }}</td>
+                  <td>{{ card.rarity ?? '—' }}</td>
+                  <td>{{ colorLabel(card.colorIdentity) }}</td>
+                  <td>{{ card.starter ? 'Sí' : '—' }}</td>
+                  <td v-if="auth.can('manage_cards')" class="meta-list-actions-cell" @click.stop>
+                    <button
+                      class="btn-ghost btn-xs btn-danger"
+                      :disabled="deletingCard"
+                      @click="deleteMetaCard(card)"
+                      title="Eliminar metadatos"
+                    ><i class="bi bi-trash"></i></button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
@@ -1955,6 +2179,21 @@ input[type="range"]::-moz-range-thumb {
 .modal-box--form        { max-width: 1110px; margin-top: 4rem;}
 .modal-box--form-wide   { max-width: 1480px; margin-top: 4rem;}
 .modal-box--effect      { max-width: 1480px; margin-top: 4rem;}
+.modal-box--meta-list   { width: 95vw; max-width: 95vw; margin-top: 4rem; display: flex; flex-direction: column; max-height: 85vh; overflow: hidden; }
+.meta-list-count { font-size: 0.85rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem; }
+.meta-list-table-wrap { overflow: auto; flex: 1; min-height: 0; }
+.meta-list-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.meta-list-table th { position: sticky; top: 0; background: var(--card-bg); color: var(--text-secondary); text-align: left; padding: 0.25rem 0.35rem; border-bottom: 1px solid var(--card-border); white-space: nowrap; z-index: 1; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.meta-list-table td { padding: 0.2rem 0.35rem; border-bottom: 1px solid var(--card-border); color: var(--text-primary); white-space: nowrap; vertical-align: middle; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.meta-list-row { cursor: pointer; transition: background 0.15s; }
+.meta-list-row:hover { background: var(--card-hover, rgba(255,255,255,0.05)); }
+.meta-list-img-cell { width: 36px; padding: 0.15rem 0.25rem !important; max-width: 36px; }
+.meta-list-thumb { width: 30px; height: 42px; object-fit: cover; border-radius: 2px; display: block; }
+.meta-list-no-img { font-size: 0.65rem; color: var(--text-muted); font-style: italic; white-space: nowrap; }
+.meta-list-actions-cell { width: 1.75rem; text-align: center; padding: 0.1rem !important; max-width: 1.75rem; }
+.ml-sortable { cursor: pointer; user-select: none; }
+.ml-sortable:hover { color: var(--text-primary); }
+.ml-sort-idle { opacity: 0.3; }
 
 .form-with-preview {
   display: flex;
