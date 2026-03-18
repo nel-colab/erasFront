@@ -904,6 +904,12 @@ onMounted(async () => {
 
 // ── Meta list modal ───────────────────────────────────────────────────────────
 const showMetaList = ref(false)
+const mlSortKey = ref('cardNumber')
+const mlSortDir = ref('asc')
+function mlSort(key) {
+  if (mlSortKey.value === key) mlSortDir.value = mlSortDir.value === 'asc' ? 'desc' : 'asc'
+  else { mlSortKey.value = key; mlSortDir.value = 'asc' }
+}
 
 // Map drive cards by the same composite key so we can look up images for meta cards
 // Maps composite key → array of drive cards (multiple when duplicates exist)
@@ -1011,16 +1017,21 @@ const metaListCards = computed(() => {
     })
     .sort((a, b) => {
       let va, vb
-      switch (sortKey.value) {
-        case 'name':     va = (a.cardName ?? '').toLowerCase(); vb = (b.cardName ?? '').toLowerCase(); break
-        case 'cost':     va = a.cost     ?? Infinity; vb = b.cost     ?? Infinity; break
-        case 'level':    va = a.level    ?? Infinity; vb = b.level    ?? Infinity; break
-        case 'strength': va = a.strength ?? Infinity; vb = b.strength ?? Infinity; break
-        default:         va = a.cardNumber ?? Infinity; vb = b.cardNumber ?? Infinity
+      switch (mlSortKey.value) {
+        case 'cardName':      va = (a.cardName ?? '').toLowerCase();            vb = (b.cardName ?? '').toLowerCase(); break
+        case 'edition':       va = (a.edition ?? '').toLowerCase();             vb = (b.edition ?? '').toLowerCase(); break
+        case 'cardType':      va = (a.cardType ?? '').toLowerCase();            vb = (b.cardType ?? '').toLowerCase(); break
+        case 'cost':          va = a.cost          ?? Infinity;                 vb = b.cost          ?? Infinity; break
+        case 'level':         va = a.level         ?? Infinity;                 vb = b.level         ?? Infinity; break
+        case 'strength':      va = a.strength      ?? Infinity;                 vb = b.strength      ?? Infinity; break
+        case 'rarity':        va = (a.rarity ?? '').toLowerCase();              vb = (b.rarity ?? '').toLowerCase(); break
+        case 'colorIdentity': va = (a.colorIdentity ?? '').toLowerCase();       vb = (b.colorIdentity ?? '').toLowerCase(); break
+        case 'starter':       va = a.starter ? 0 : 1;                          vb = b.starter ? 0 : 1; break
+        default:              va = a.cardNumber ?? Infinity;                    vb = b.cardNumber ?? Infinity
       }
       if (va === vb) return 0
       const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb
-      return sortDir.value === 'asc' ? cmp : -cmp
+      return mlSortDir.value === 'asc' ? cmp : -cmp
     })
 })
 
@@ -1863,17 +1874,17 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
               <thead>
                 <tr>
                   <th>Imagen</th>
-                  <th>Nombre</th>
-                  <th>Edición</th>
-                  <th>#</th>
-                  <th>Tipo</th>
-                  <th>Coste</th>
-                  <th>Nivel</th>
-                  <th>Fuerza</th>
+                  <th class="ml-sortable" @click="mlSort('cardName')">Nombre <i :class="mlSortKey==='cardName' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('edition')">Edición <i :class="mlSortKey==='edition' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('cardNumber')"># <i :class="mlSortKey==='cardNumber' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('cardType')">Tipo <i :class="mlSortKey==='cardType' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('cost')">Coste <i :class="mlSortKey==='cost' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('level')">Nivel <i :class="mlSortKey==='level' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('strength')">Fuerza <i :class="mlSortKey==='strength' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
                   <th>Clases</th>
-                  <th>Rareza</th>
-                  <th>Color identidad</th>
-                  <th>Iniciador</th>
+                  <th class="ml-sortable" @click="mlSort('rarity')">Rareza <i :class="mlSortKey==='rarity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('colorIdentity')">Color <i :class="mlSortKey==='colorIdentity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable" @click="mlSort('starter')">Iniciador <i :class="mlSortKey==='starter' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
                   <th v-if="auth.can('manage_cards')"></th>
                 </tr>
               </thead>
@@ -2167,9 +2178,9 @@ input[type="range"]::-moz-range-thumb {
 .modal-box--form        { max-width: 1110px; margin-top: 4rem;}
 .modal-box--form-wide   { max-width: 1480px; margin-top: 4rem;}
 .modal-box--effect      { max-width: 1480px; margin-top: 4rem;}
-.modal-box--meta-list   { max-width: 1480px; margin-top: 4rem; display: flex; flex-direction: column; }
+.modal-box--meta-list   { width: 95vw; max-width: 95vw; margin-top: 4rem; display: flex; flex-direction: column; max-height: 85vh; overflow: hidden; }
 .meta-list-count { font-size: 0.85rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem; }
-.meta-list-table-wrap { overflow: auto; flex: 1; }
+.meta-list-table-wrap { overflow: auto; flex: 1; min-height: 0; }
 .meta-list-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
 .meta-list-table th { position: sticky; top: 0; background: var(--card-bg); color: var(--text-secondary); text-align: left; padding: 0.25rem 0.35rem; border-bottom: 1px solid var(--card-border); white-space: nowrap; z-index: 1; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .meta-list-table td { padding: 0.2rem 0.35rem; border-bottom: 1px solid var(--card-border); color: var(--text-primary); white-space: nowrap; vertical-align: middle; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
@@ -2179,6 +2190,9 @@ input[type="range"]::-moz-range-thumb {
 .meta-list-thumb { width: 30px; height: 42px; object-fit: cover; border-radius: 2px; display: block; }
 .meta-list-no-img { font-size: 0.65rem; color: var(--text-muted); font-style: italic; white-space: nowrap; }
 .meta-list-actions-cell { width: 1.75rem; text-align: center; padding: 0.1rem !important; max-width: 1.75rem; }
+.ml-sortable { cursor: pointer; user-select: none; }
+.ml-sortable:hover { color: var(--text-primary); }
+.ml-sort-idle { opacity: 0.3; }
 
 .form-with-preview {
   display: flex;
