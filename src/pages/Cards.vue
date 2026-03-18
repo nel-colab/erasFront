@@ -906,13 +906,24 @@ onMounted(async () => {
 const showMetaList = ref(false)
 
 // Map drive cards by the same composite key so we can look up images for meta cards
-const driveCardByKey = computed(() => {
+// Maps composite key → array of drive cards (multiple when duplicates exist)
+const driveCardsByKey = computed(() => {
   const m = new Map()
   driveCards.value.forEach(dc => {
-    m.set(buildCardKey(dc.edition, dc.number, dc.sub_edition, dc.color_identity), dc)
+    const k = buildCardKey(dc.edition, dc.number, dc.sub_edition, dc.color_identity)
+    if (!m.has(k)) m.set(k, [])
+    m.get(k).push(dc)
   })
   return m
 })
+
+// Returns the single drive card for a meta card's key, or null if 0 or 2+ matches
+function uniqueDriveCard(card) {
+  const matches = driveCardsByKey.value.get(
+    buildCardKey(card.edition, card.cardNumber, card.subEdition, card.colorIdentity)
+  )
+  return matches?.length === 1 ? matches[0] : null
+}
 
 const metaListCards = computed(() => {
   const costFull     = fCostMin.value === 0 && fCostMax.value === COST_MAX
@@ -1871,17 +1882,16 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
                   v-for="card in metaListCards"
                   :key="card.id"
                   class="meta-list-row"
-                  @click="(() => { const dc = driveCardByKey.get(buildCardKey(card.edition, card.cardNumber, card.subEdition, card.colorIdentity)); if (dc) { showMetaList = false; openDetail({ ...dc, meta: card }) } })()"
+                  @click="(() => { const dc = uniqueDriveCard(card); if (dc) { showMetaList = false; openDetail({ ...dc, meta: card }) } })()"
                 >
                   <td class="meta-list-img-cell">
-                    <template v-if="driveCardByKey.get(buildCardKey(card.edition, card.cardNumber, card.subEdition, card.colorIdentity))">
-                      <img
-                        :src="cardImageUrl(driveCardByKey.get(buildCardKey(card.edition, card.cardNumber, card.subEdition, card.colorIdentity)))"
-                        :alt="card.cardName"
-                        class="meta-list-thumb"
-                        @error="e => e.target.replaceWith(Object.assign(document.createElement('span'), { className: 'meta-list-no-img', textContent: 'Sin imagen' }))"
-                      />
-                    </template>
+                    <img
+                      v-if="uniqueDriveCard(card)"
+                      :src="cardImageUrl(uniqueDriveCard(card))"
+                      :alt="card.cardName"
+                      class="meta-list-thumb"
+                      @error="e => e.target.replaceWith(Object.assign(document.createElement('span'), { className: 'meta-list-no-img', textContent: 'Sin imagen' }))"
+                    />
                     <span v-else class="meta-list-no-img">Sin imagen</span>
                   </td>
                   <td>{{ card.cardName }}</td>
@@ -2160,15 +2170,15 @@ input[type="range"]::-moz-range-thumb {
 .modal-box--meta-list   { max-width: 1480px; margin-top: 4rem; display: flex; flex-direction: column; }
 .meta-list-count { font-size: 0.85rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem; }
 .meta-list-table-wrap { overflow: auto; flex: 1; }
-.meta-list-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-.meta-list-table th { position: sticky; top: 0; background: var(--card-bg); color: var(--text-secondary); text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--card-border); white-space: nowrap; z-index: 1; }
-.meta-list-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border); color: var(--text-primary); white-space: nowrap; vertical-align: middle; }
+.meta-list-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.meta-list-table th { position: sticky; top: 0; background: var(--card-bg); color: var(--text-secondary); text-align: left; padding: 0.25rem 0.35rem; border-bottom: 1px solid var(--card-border); white-space: nowrap; z-index: 1; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.meta-list-table td { padding: 0.2rem 0.35rem; border-bottom: 1px solid var(--card-border); color: var(--text-primary); white-space: nowrap; vertical-align: middle; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 .meta-list-row { cursor: pointer; transition: background 0.15s; }
 .meta-list-row:hover { background: var(--card-hover, rgba(255,255,255,0.05)); }
-.meta-list-img-cell { width: 48px; padding: 0.2rem 0.4rem !important; }
-.meta-list-thumb { width: 40px; height: 56px; object-fit: cover; border-radius: 3px; display: block; }
-.meta-list-no-img { font-size: 0.7rem; color: var(--text-muted); font-style: italic; white-space: nowrap; }
-.meta-list-actions-cell { width: 2rem; text-align: center; padding: 0.2rem !important; }
+.meta-list-img-cell { width: 36px; padding: 0.15rem 0.25rem !important; max-width: 36px; }
+.meta-list-thumb { width: 30px; height: 42px; object-fit: cover; border-radius: 2px; display: block; }
+.meta-list-no-img { font-size: 0.65rem; color: var(--text-muted); font-style: italic; white-space: nowrap; }
+.meta-list-actions-cell { width: 1.75rem; text-align: center; padding: 0.1rem !important; max-width: 1.75rem; }
 
 .form-with-preview {
   display: flex;
