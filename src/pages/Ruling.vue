@@ -621,7 +621,7 @@ function cambiarSeccion(seccion){
 
 
 .imagen-manual{
-  width:70%;
+  width:100%;
   height: 100%;
   display:flex;
   justify-content:flex-end; /* alinea la imagen a la derecha */
