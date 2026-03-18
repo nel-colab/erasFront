@@ -1140,6 +1140,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
             <label class="filter-label">
               Nivel<span v-if="fLevelMin > 0 || fLevelMax < LEVEL_MAX"> ({{ fLevelMin }}–{{ fLevelMax }})</span><span v-else> (Todos)</span>
             </label>
+            
             <div class="dual-range"
               :style="{ '--pct-min': (fLevelMin / LEVEL_MAX * 100) + '%', '--pct-max': (fLevelMax / LEVEL_MAX * 100) + '%' }">
               <div class="dual-range-track"></div>
