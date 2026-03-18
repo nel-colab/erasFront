@@ -16,7 +16,9 @@ import PublicDecks from '../pages/PublicDecks.vue'
 import RolesManager from '../pages/RolesManager.vue'
 import PermissionsManager from '../pages/PermissionsManager.vue'
 import UsersManager from '../pages/UsersManager.vue'
+import Ruling from '../pages/Ruling.vue'
 import NotFound from '../pages/NotFound.vue'
+
 
 const routes = [
   { path: '/home', component: Home, alias: ['/', '/Home'], meta: { public: true } },
@@ -34,6 +36,7 @@ const routes = [
   { path: '/roles', component: RolesManager },
   { path: '/permissions', component: PermissionsManager },
   { path: '/users-manager', component: UsersManager },
+  { path: '/ruling', component: Ruling },
   { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
 ]
 
