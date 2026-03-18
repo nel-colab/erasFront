@@ -791,6 +791,41 @@ const saveCardName = async (card) => {
 }
 
 
+// ── Delete card / image ───────────────────────────────────────────────────────
+
+const deletingCard = ref(false)
+
+async function deleteCardImage(card) {
+  if (!confirm(`¿Eliminar la imagen y el registro de "${card.name}"? Esta acción también eliminará los metadatos si existen.`)) return
+  deletingCard.value = true
+  try {
+    await axios.delete(`/api/drive/cards/db/${card.id}`)
+    if (card.meta) await axios.delete(`/api/cards/${card.meta.id}`).catch(() => {})
+    closeDetail()
+    await cardsStore.reload()
+  } catch {
+    alert('Error al eliminar la imagen.')
+  } finally {
+    deletingCard.value = false
+  }
+}
+
+async function deleteCardMeta(card) {
+  if (!confirm(`¿Eliminar los metadatos de "${card.name}"? La imagen permanecerá.`)) return
+  deletingCard.value = true
+  try {
+    await axios.delete(`/api/cards/${card.meta.id}`)
+    await cardsStore.reload()
+    // refresh detailCard meta
+    const updated = cardsStore.driveCards.find(c => c.id === card.id)
+    if (updated) detailCard.value = updated
+  } catch {
+    alert('Error al eliminar los metadatos.')
+  } finally {
+    deletingCard.value = false
+  }
+}
+
 // ── Lazy rendering (performance) ─────────────────────────────────────────────
 
 const cardImageUrl = (card) => {
@@ -1252,8 +1287,12 @@ watch([showDetail, showCardForm, showEffectModal], ([d, f, e]) => {
                     </div>
                   </template>
 
-                  <div class="modal-actions" v-if="auth.can('manage_cards') && detailCard.meta">
-                    <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Editar</button>
+                  <div class="modal-actions" v-if="auth.can('manage_cards')">
+                    <template v-if="detailCard.meta">
+                      <button class="btn-filled btn-sm" @click="openEdit(detailCard)">Editar</button>
+                      <button class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardMeta(detailCard)">Eliminar metadatos</button>
+                    </template>
+                    <button class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardImage(detailCard)">Eliminar imagen</button>
                   </div>
                 </div>
 
