@@ -59,7 +59,7 @@ function cambiarSeccion(seccion){
       >
         Zonas de juego 
       </a>
-
+ 
     </div>
  
   </div>
