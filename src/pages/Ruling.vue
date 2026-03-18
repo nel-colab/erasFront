@@ -59,9 +59,102 @@ function cambiarSeccion(seccion){
       >
         Zonas de juego 
       </a>
-
+ 
     </div>
  
+  </div>
+</div>
+
+<!-- DEFINICIONES -->
+
+<div v-if="seccionActual==='tipos'" class="row justify-content-center mb-4">
+  <div class="col-xl-10 col-lg-11 col-md-12">
+    <div class="definiciones">
+      <h5 class="definiciones-title">Definiciones</h5>
+
+      <div class="row g-3">
+
+        <!-- 1 -->
+        <div class="col-md-6">
+          <p>
+            <b>Mazo:</b> Un mazo está compuesto por <b>50 cartas</b>.
+            Todas deben pertenecer al mismo <b>color o clase</b> (el color blanco es generico para todos los mazos)
+            de la criatura con keyword <b>Iniciador</b>.
+            Cada carta puede incluirse con un máximo de <b>4 copias</b>.
+          </p>
+        </div>
+
+        <!-- 2 -->
+        <div class="col-md-6">
+          <p>
+            <b>Retaguardia:</b> A diferencia de la línea frontal, las criaturas en la 
+            retaguardia están protegidas del oponente. Desde aquí no pueden declarar 
+            ataques, bloquear criaturas enemigas ni afectarlas con sus efectos. 
+            Esta zona también es donde se juegan las estructuras y utilidades.
+          </p>
+        </div>
+
+        <!-- 3 -->
+        <div class="col-md-6">
+          <p>
+            <b>Tributos:</b> Zona donde se colocan cartas usadas
+            como coste o son eviadas por efectos del juego.
+          </p>
+        </div>
+
+        <!-- 4 -->
+        <div class="col-md-6">
+          <p>
+            <b>Descarte:</b> Zona donde se colocan utilidades usadas
+            o cartas que son eviadas por efectos del juego.
+            Si una criatura es destruido por enfrentamiento o un efecto rival
+            va a esta zona sin pasar por los tributos.
+          </p>
+        </div>
+
+        <!-- 5 -->
+        <div class="col-md-6">
+          <p>
+            <b>Línea frontal:</b> Es la zona donde tus criaturas se enfrentan directamente 
+            con las del oponente. Desde aquí pueden declarar ataques, bloquear criaturas 
+            enemigas y usar efectos que las afecten. Sin embargo, al estar en primera línea 
+            también quedan expuestas a los efectos de las criaturas rivales.
+          </p>
+          
+        </div>
+
+        <!-- IMAGEN (reemplaza el espacio vacío) -->
+        <div class="col-md-6">
+          
+        </div>
+
+        <!-- 6 -->
+        <div class="col-md-6">
+          <p>
+            <b>Vidas:</b> Al comenzar la partida, cada jugador coloca 6 cartas 
+            del tope de su mazo boca abajo en la sección de vidas, formando una pila.
+            Estas cartas representan tus vidas. Si en algún momento te quedas sin vidas, pierdes la partida inmediatamente.
+          </p>
+          <p> La forma más común de perder vidas es a través de ataques.</p>
+          <p> Cuando un jugador declara un ataque, el oponente sigue estos pasos:</p>
+          <ul>
+            <li> <b>1.</b> Si es una utilidad o estructura: puede jugarla inmediatamente sin pagar su coste o añadirla a su mano.</li>
+            <li> <b>2.</b> Si es una criatura: compara su fuerza con la de la criatura atacante:</li>
+            <ol><b>2.1</b> Si tiene más fuerza: puede añadirla a su mano o reforzar, colocándola boca arriba al fondo de sus vidas. 
+              (Solo puede reforzar si la criatura fue revelada por un ataque).</ol>
+            <ol><b>2.2</b> Si tiene menos fuerza: debe tributarla.</ol>
+          </ul>
+        </div>
+
+        <!-- IMAGEN (reemplaza el espacio vacío) -->
+        <div class="col-md-6 d-flex justify-content-center align-items-center">
+          <div class="imagen-manual">
+            <img src="../assets/dibujos/card-iniciales.png" alt="Imagen del juego" />
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 </div>
 
@@ -543,5 +636,6 @@ function cambiarSeccion(seccion){
   object-fit:contain;
   border-radius:10px;
 }
+
 
 </style>
