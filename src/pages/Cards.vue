@@ -911,6 +911,55 @@ function mlSort(key) {
   else { mlSortKey.value = key; mlSortDir.value = 'asc' }
 }
 
+// ── Assign drive card image to metadata ───────────────────────────────────────
+const showAssignPicker = ref(false)
+const assignTarget     = ref(null)   // the meta card being assigned
+const assignSearch     = ref('')
+const assignSaving     = ref(false)
+
+const assignFilteredDriveCards = computed(() => {
+  const q = assignSearch.value.toLowerCase()
+  const cards = q
+    ? driveCards.value.filter(dc =>
+        (dc.name ?? '').toLowerCase().includes(q) ||
+        (dc.edition ?? '').toLowerCase().includes(q) ||
+        String(dc.number ?? '').includes(q)
+      )
+    : driveCards.value
+  return cards.slice().sort((a, b) => {
+    const ea = a.edition ?? '', eb = b.edition ?? ''
+    if (ea !== eb) return ea.localeCompare(eb)
+    return (a.number ?? 0) - (b.number ?? 0)
+  })
+})
+
+function openAssignPicker(metaCard) {
+  assignTarget.value = metaCard
+  assignSearch.value = metaCard.cardName ?? ''
+  showAssignPicker.value = true
+}
+
+async function assignDriveCard(dc) {
+  if (!assignTarget.value) return
+  assignSaving.value = true
+  try {
+    await axios.put(`/api/cards/${assignTarget.value.id}`, {
+      ...assignTarget.value,
+      edition:       dc.edition,
+      cardNumber:    dc.number,
+      colorIdentity: dc.color_identity,
+      subEdition:    dc.sub_edition ?? null,
+    })
+    showAssignPicker.value = false
+    assignTarget.value = null
+    await cardsStore.reload()
+  } catch {
+    alert('Error al asignar la imagen.')
+  } finally {
+    assignSaving.value = false
+  }
+}
+
 // Map drive cards by the same composite key so we can look up images for meta cards
 // Maps composite key → array of drive cards (multiple when duplicates exist)
 const driveCardsByKey = computed(() => {
@@ -1036,8 +1085,8 @@ const metaListCards = computed(() => {
 })
 
 // ── Lock page scroll when modals open ────────────────────────────────────────
-watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) => {
-  const anyOpen = d || f || e || m
+watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker], ([d, f, e, m, a]) => {
+  const anyOpen = d || f || e || m || a
   document.body.style.overflow = anyOpen ? 'hidden' : ''
 })
 
@@ -1919,6 +1968,11 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
                   <td>{{ card.starter ? 'Sí' : '—' }}</td>
                   <td v-if="auth.can('manage_cards')" class="meta-list-actions-cell" @click.stop>
                     <button
+                      class="btn-ghost btn-xs"
+                      @click="openAssignPicker(card)"
+                      title="Asignar imagen"
+                    ><i class="bi bi-link-45deg"></i></button>
+                    <button
                       class="btn-ghost btn-xs btn-danger"
                       :disabled="deletingCard"
                       @click="deleteMetaCard(card)"
@@ -1929,6 +1983,47 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- Assign drive card picker                                           -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <Teleport to="body">
+      <div v-if="showAssignPicker" class="modal-overlay modal-overlay--nested" @click.self="showAssignPicker = false">
+        <div class="modal-box modal-box--assign">
+          <button class="modal-close" @click="showAssignPicker = false">✕</button>
+          <h3 class="modal-form-title">
+            Asignar imagen a <em>{{ assignTarget?.cardName }}</em>
+          </h3>
+
+          <input
+            v-model="assignSearch"
+            class="filter-input"
+            placeholder="Buscar por nombre, edición o número…"
+            style="margin-bottom:0.75rem"
+          />
+
+          <div class="assign-grid">
+            <div
+              v-for="dc in assignFilteredDriveCards"
+              :key="dc.id"
+              class="assign-card"
+              :class="{ 'assign-card--current': dc.edition === assignTarget?.edition && dc.number === assignTarget?.cardNumber && (dc.sub_edition ?? null) === (assignTarget?.subEdition ?? null) && dc.color_identity === assignTarget?.colorIdentity }"
+              @click="assignDriveCard(dc)"
+            >
+              <div class="assign-card-img-wrap">
+                <img :src="cardImageUrl(dc)" :alt="dc.name" class="assign-card-img" />
+              </div>
+              <div class="assign-card-info">
+                <div class="assign-card-name">{{ dc.name }}</div>
+                <div class="assign-card-sub">{{ dc.edition }}{{ dc.sub_edition ? ' · ' + subLabel(dc.sub_edition) : '' }} · #{{ dc.number }} · {{ colorLabel(dc.color_identity) }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="assignFilteredDriveCards.length === 0" class="cp-empty">Sin resultados.</div>
         </div>
       </div>
     </Teleport>
@@ -2194,6 +2289,19 @@ input[type="range"]::-moz-range-thumb {
 .ml-sortable { cursor: pointer; user-select: none; }
 .ml-sortable:hover { color: var(--text-primary); }
 .ml-sort-idle { opacity: 0.3; }
+.meta-list-actions-cell { display: flex; gap: 0.2rem; align-items: center; }
+
+/* Assign picker */
+.modal-box--assign { width: 80vw; max-width: 80vw; max-height: 85vh; margin-top: 4rem; display: flex; flex-direction: column; overflow: hidden; }
+.assign-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; overflow-y: auto; flex: 1; min-height: 0; padding: 0.25rem; }
+.assign-card { border: 2px solid var(--card-border); border-radius: 8px; cursor: pointer; overflow: hidden; transition: border-color 0.15s, transform 0.1s; }
+.assign-card:hover { border-color: var(--text-secondary); transform: scale(1.02); }
+.assign-card--current { border-color: #4caf50; }
+.assign-card-img-wrap { aspect-ratio: 63/88; overflow: hidden; background: var(--input-bg); }
+.assign-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.assign-card-info { padding: 0.25rem 0.35rem; }
+.assign-card-name { font-size: 0.7rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assign-card-sub { font-size: 0.62rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .form-with-preview {
   display: flex;
