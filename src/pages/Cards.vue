@@ -911,6 +911,55 @@ function mlSort(key) {
   else { mlSortKey.value = key; mlSortDir.value = 'asc' }
 }
 
+// ── Assign drive card image to metadata ───────────────────────────────────────
+const showAssignPicker = ref(false)
+const assignTarget     = ref(null)   // the meta card being assigned
+const assignSearch     = ref('')
+const assignSaving     = ref(false)
+
+const assignFilteredDriveCards = computed(() => {
+  const q = assignSearch.value.toLowerCase()
+  const cards = q
+    ? driveCards.value.filter(dc =>
+        (dc.name ?? '').toLowerCase().includes(q) ||
+        (dc.edition ?? '').toLowerCase().includes(q) ||
+        String(dc.number ?? '').includes(q)
+      )
+    : driveCards.value
+  return cards.slice().sort((a, b) => {
+    const ea = a.edition ?? '', eb = b.edition ?? ''
+    if (ea !== eb) return ea.localeCompare(eb)
+    return (a.number ?? 0) - (b.number ?? 0)
+  })
+})
+
+function openAssignPicker(metaCard) {
+  assignTarget.value = metaCard
+  assignSearch.value = metaCard.cardName ?? ''
+  showAssignPicker.value = true
+}
+
+async function assignDriveCard(dc) {
+  if (!assignTarget.value) return
+  assignSaving.value = true
+  try {
+    await axios.put(`/api/cards/${assignTarget.value.id}`, {
+      ...assignTarget.value,
+      edition:       dc.edition,
+      cardNumber:    dc.number,
+      colorIdentity: dc.color_identity,
+      subEdition:    dc.sub_edition ?? null,
+    })
+    showAssignPicker.value = false
+    assignTarget.value = null
+    await cardsStore.reload()
+  } catch {
+    alert('Error al asignar la imagen.')
+  } finally {
+    assignSaving.value = false
+  }
+}
+
 // Map drive cards by the same composite key so we can look up images for meta cards
 // Maps composite key → array of drive cards (multiple when duplicates exist)
 const driveCardsByKey = computed(() => {
@@ -1036,8 +1085,8 @@ const metaListCards = computed(() => {
 })
 
 // ── Lock page scroll when modals open ────────────────────────────────────────
-watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) => {
-  const anyOpen = d || f || e || m
+watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker], ([d, f, e, m, a]) => {
+  const anyOpen = d || f || e || m || a
   document.body.style.overflow = anyOpen ? 'hidden' : ''
 })
 
@@ -1874,19 +1923,19 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
             <table class="meta-list-table">
               <thead>
                 <tr>
-                  <th>Imagen</th>
+                  <th class="th-xs">Img</th>
                   <th class="ml-sortable" @click="mlSort('cardName')">Nombre <i :class="mlSortKey==='cardName' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('edition')">Edición <i :class="mlSortKey==='edition' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('cardNumber')"># <i :class="mlSortKey==='cardNumber' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('cardType')">Tipo <i :class="mlSortKey==='cardType' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('cost')">Coste <i :class="mlSortKey==='cost' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('level')">Nivel <i :class="mlSortKey==='level' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('strength')">Fuerza <i :class="mlSortKey==='strength' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-narrow" @click="mlSort('edition')">Ed. <i :class="mlSortKey==='edition' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-xs" @click="mlSort('cardNumber')"># <i :class="mlSortKey==='cardNumber' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-narrow" @click="mlSort('cardType')">Tipo <i :class="mlSortKey==='cardType' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-xs" @click="mlSort('cost')">Cst <i :class="mlSortKey==='cost' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-xs" @click="mlSort('level')">Niv <i :class="mlSortKey==='level' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-xs" @click="mlSort('strength')">Fza <i :class="mlSortKey==='strength' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
                   <th>Clases</th>
-                  <th class="ml-sortable" @click="mlSort('rarity')">Rareza <i :class="mlSortKey==='rarity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('colorIdentity')">Color <i :class="mlSortKey==='colorIdentity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th class="ml-sortable" @click="mlSort('starter')">Iniciador <i :class="mlSortKey==='starter' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
-                  <th v-if="auth.can('manage_cards')"></th>
+                  <th class="ml-sortable th-narrow" @click="mlSort('rarity')">Rar <i :class="mlSortKey==='rarity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-narrow" @click="mlSort('colorIdentity')">Color <i :class="mlSortKey==='colorIdentity' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th class="ml-sortable th-xs" @click="mlSort('starter')">Ini <i :class="mlSortKey==='starter' ? (mlSortDir==='asc'?'bi bi-sort-up':'bi bi-sort-down') : 'bi bi-arrow-down-up ml-sort-idle'"></i></th>
+                  <th v-if="auth.can('manage_cards')" class="meta-list-actions-cell" style="position:sticky;right:0;z-index:2;background:var(--card-bg);border-left:1px solid var(--card-border)"></th>
                 </tr>
               </thead>
               <tbody>
@@ -1907,17 +1956,22 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
                     <span v-else class="meta-list-no-img">Sin imagen</span>
                   </td>
                   <td>{{ card.cardName }}</td>
-                  <td>{{ card.edition }}{{ card.subEdition ? ' · ' + subLabel(card.subEdition) : '' }}</td>
-                  <td>{{ card.cardNumber }}</td>
+                  <td class="td-center">{{ card.edition }}{{ card.subEdition ? '·' + subLabel(card.subEdition) : '' }}</td>
+                  <td class="td-center">{{ card.cardNumber }}</td>
                   <td>{{ CARD_TYPE_ES[card.cardType] ?? card.cardType ?? '—' }}</td>
-                  <td>{{ card.cost ?? '—' }}</td>
-                  <td>{{ card.level ?? '—' }}</td>
-                  <td>{{ card.strength ?? '—' }}</td>
+                  <td class="td-center">{{ card.cost ?? '—' }}</td>
+                  <td class="td-center">{{ card.level ?? '—' }}</td>
+                  <td class="td-center">{{ card.strength ?? '—' }}</td>
                   <td>{{ card.cardClasses?.join(', ') || '—' }}</td>
-                  <td>{{ card.rarity ?? '—' }}</td>
-                  <td>{{ colorLabel(card.colorIdentity) }}</td>
-                  <td>{{ card.starter ? 'Sí' : '—' }}</td>
+                  <td class="td-center">{{ card.rarity ?? '—' }}</td>
+                  <td class="td-center">{{ colorLabel(card.colorIdentity) }}</td>
+                  <td class="td-center">{{ card.starter ? 'Sí' : '—' }}</td>
                   <td v-if="auth.can('manage_cards')" class="meta-list-actions-cell" @click.stop>
+                    <button
+                      class="btn-ghost btn-xs"
+                      @click="openAssignPicker(card)"
+                      title="Asignar imagen"
+                    ><i class="bi bi-link-45deg"></i></button>
                     <button
                       class="btn-ghost btn-xs btn-danger"
                       :disabled="deletingCard"
@@ -1929,6 +1983,47 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList], ([d, f, e, m]) 
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- Assign drive card picker                                           -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <Teleport to="body">
+      <div v-if="showAssignPicker" class="modal-overlay modal-overlay--nested" @click.self="showAssignPicker = false">
+        <div class="modal-box modal-box--assign">
+          <button class="modal-close" @click="showAssignPicker = false">✕</button>
+          <h3 class="modal-form-title">
+            Asignar imagen a <em>{{ assignTarget?.cardName }}</em>
+          </h3>
+
+          <input
+            v-model="assignSearch"
+            class="filter-input"
+            placeholder="Buscar por nombre, edición o número…"
+            style="margin-bottom:0.75rem"
+          />
+
+          <div class="assign-grid">
+            <div
+              v-for="dc in assignFilteredDriveCards"
+              :key="dc.id"
+              class="assign-card"
+              :class="{ 'assign-card--current': dc.edition === assignTarget?.edition && dc.number === assignTarget?.cardNumber && (dc.sub_edition ?? null) === (assignTarget?.subEdition ?? null) && dc.color_identity === assignTarget?.colorIdentity }"
+              @click="assignDriveCard(dc)"
+            >
+              <div class="assign-card-img-wrap">
+                <img :src="cardImageUrl(dc)" :alt="dc.name" class="assign-card-img" />
+              </div>
+              <div class="assign-card-info">
+                <div class="assign-card-name">{{ dc.name }}</div>
+                <div class="assign-card-sub">{{ dc.edition }}{{ dc.sub_edition ? ' · ' + subLabel(dc.sub_edition) : '' }} · #{{ dc.number }} · {{ colorLabel(dc.color_identity) }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="assignFilteredDriveCards.length === 0" class="cp-empty">Sin resultados.</div>
         </div>
       </div>
     </Teleport>
@@ -2182,18 +2277,34 @@ input[type="range"]::-moz-range-thumb {
 .modal-box--meta-list   { width: 95vw; max-width: 95vw; margin-top: 4rem; display: flex; flex-direction: column; max-height: 85vh; overflow: hidden; }
 .meta-list-count { font-size: 0.85rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem; }
 .meta-list-table-wrap { overflow: auto; flex: 1; min-height: 0; }
-.meta-list-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.meta-list-table { min-width: 100%; width: max-content; border-collapse: collapse; font-size: 0.75rem; }
 .meta-list-table th { position: sticky; top: 0; background: var(--card-bg); color: var(--text-secondary); text-align: left; padding: 0.25rem 0.35rem; border-bottom: 1px solid var(--card-border); white-space: nowrap; z-index: 1; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
-.meta-list-table td { padding: 0.2rem 0.35rem; border-bottom: 1px solid var(--card-border); color: var(--text-primary); white-space: nowrap; vertical-align: middle; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.meta-list-table th.th-narrow { width: 46px; text-align: center; }
+.meta-list-table th.th-xs    { width: 32px; text-align: center; }
+.meta-list-table td { padding: 0.2rem 0.35rem; border-bottom: 1px solid var(--card-border); color: var(--text-primary); white-space: nowrap; vertical-align: middle; }
+.meta-list-table td.td-center { text-align: center; }
 .meta-list-row { cursor: pointer; transition: background 0.15s; }
 .meta-list-row:hover { background: var(--card-hover, rgba(255,255,255,0.05)); }
 .meta-list-img-cell { width: 36px; padding: 0.15rem 0.25rem !important; max-width: 36px; }
 .meta-list-thumb { width: 30px; height: 42px; object-fit: cover; border-radius: 2px; display: block; }
 .meta-list-no-img { font-size: 0.65rem; color: var(--text-muted); font-style: italic; white-space: nowrap; }
-.meta-list-actions-cell { width: 1.75rem; text-align: center; padding: 0.1rem !important; max-width: 1.75rem; }
+.meta-list-actions-cell { width: 4rem; text-align: center; padding: 0.1rem 0.25rem !important; position: sticky; right: 0; background: var(--card-bg); border-left: 1px solid var(--card-border); }
 .ml-sortable { cursor: pointer; user-select: none; }
 .ml-sortable:hover { color: var(--text-primary); }
 .ml-sort-idle { opacity: 0.3; }
+.meta-list-actions-cell { display: flex; gap: 0.15rem; align-items: center; justify-content: center; }
+
+/* Assign picker */
+.modal-box--assign { width: 80vw; max-width: 80vw; max-height: 85vh; margin-top: 4rem; display: flex; flex-direction: column; overflow: hidden; }
+.assign-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; overflow-y: auto; flex: 1; min-height: 0; padding: 0.25rem; }
+.assign-card { border: 2px solid var(--card-border); border-radius: 8px; cursor: pointer; overflow: hidden; transition: border-color 0.15s, transform 0.1s; }
+.assign-card:hover { border-color: var(--text-secondary); transform: scale(1.02); }
+.assign-card--current { border-color: #4caf50; }
+.assign-card-img-wrap { aspect-ratio: 63/88; overflow: hidden; background: var(--input-bg); }
+.assign-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.assign-card-info { padding: 0.25rem 0.35rem; }
+.assign-card-name { font-size: 0.7rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assign-card-sub { font-size: 0.62rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .form-with-preview {
   display: flex;
