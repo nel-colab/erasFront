@@ -412,7 +412,7 @@ const PAPER_SIZES = [
 
 const CARD_W = 2.5   // inches
 const CARD_H = 3.5   // inches
-const MARGIN = 0.1   // inches
+const MARGIN = 0.5   // inches
 
 const proxyCardCount = computed(() =>
   deckEntries.value.reduce((s, e) => s + e.count, 0)

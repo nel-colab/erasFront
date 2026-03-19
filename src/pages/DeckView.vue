@@ -102,7 +102,7 @@ const PAPER_SIZES = [
 ]
 const CARD_W = 2.5
 const CARD_H = 3.5
-const MARGIN = 0.1
+const MARGIN = 0.5
 
 const proxyCardCount = computed(() =>
   deckEntries.value.reduce((s, e) => s + e.count, 0)
