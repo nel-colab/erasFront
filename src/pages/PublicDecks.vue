@@ -9,7 +9,6 @@ const decksStore = useDecksStore()
 const auth       = useAuthStore()
 
 const loading  = ref(false)
-const deleting = ref(null)
 
 decksStore.loadPublic()
 
@@ -40,7 +39,7 @@ const toggleSortDir = () => { sortDir.value = sortDir.value === 'asc' ? 'desc' :
 
 
 const editDeck = deck => {
-  router.push(`/deck-builder?id=${deck.id}&copy=true`)
+  router.push(`/deck/${deck.id}`)
 }
 
 const visibleDecks = computed(() => {
@@ -111,7 +110,7 @@ const visibleDecks = computed(() => {
           <div class="md-author">por {{ deck.username }}</div>
           <div class="md-actions">
             <button class="md-btn md-btn-edit" @click="editDeck(deck)" title="Revisar mazo">
-              <i class="bi bi-pencil-fill"></i> Revisar
+              <i class="bi bi-eye-fill"></i> Revisar
             </button>
           </div>
         </div>

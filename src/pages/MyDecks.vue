@@ -126,8 +126,11 @@ const visibleDecks = computed(() => {
         <!-- Info -->
         <div class="md-info">
           <div class="md-name">{{ deck.deckName }}</div>
-          <div class="md-actions" v-if="canManageDecks">
-            <button class="md-btn md-btn-edit" @click="editDeck(deck)" title="Editar mazo">
+          <div class="md-actions">
+            <button class="md-btn md-btn-view" @click="router.push(`/deck/${deck.id}`)" title="Revisar mazo">
+              <i class="bi bi-eye-fill"></i> Revisar
+            </button>
+            <button v-if="auth.userId === deck.userId" class="md-btn md-btn-edit" @click="editDeck(deck)" title="Editar mazo">
               <i class="bi bi-pencil-fill"></i> Editar
             </button>
             <button class="md-btn md-btn-delete"
@@ -264,6 +267,8 @@ const visibleDecks = computed(() => {
   transition: opacity 0.1s;
 }
 .md-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.md-btn-view { background: #37474f; color: #fff; }
+.md-btn-view:hover:not(:disabled) { background: #546e7a; }
 .md-btn-edit {
   background: #3f51b5;
   color: #fff;
