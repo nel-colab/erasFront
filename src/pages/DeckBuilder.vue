@@ -412,7 +412,7 @@ const PAPER_SIZES = [
 
 const CARD_W = 2.5   // inches
 const CARD_H = 3.5   // inches
-const MARGIN = 0.1   // inches – minimal so max cards fit per page
+const MARGIN = 0.1   // inches
 
 const proxyCardCount = computed(() =>
   deckEntries.value.reduce((s, e) => s + e.count, 0)
@@ -430,70 +430,24 @@ const proxyCardsPerPage = computed(() => {
 
 const proxyGenerating = ref(false)
 
-function loadImageBase64(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width  = img.naturalWidth
-      canvas.height = img.naturalHeight
-      canvas.getContext('2d').drawImage(img, 0, 0)
-      try { resolve(canvas.toDataURL('image/jpeg', 0.92)) }
-      catch (e) { reject(e) }
-    }
-    img.onerror = reject
-    img.src = url
-  })
-}
-
 async function printProxies() {
-  const { jsPDF } = await import('jspdf')
-  const paper = PAPER_SIZES.find(p => p.value === proxyPaperSize.value)
-  const landscape = proxyOrient.value === 'landscape'
-  const pw = landscape ? paper.h : paper.w
-  const ph = landscape ? paper.w : paper.h
-  const cols = Math.floor((pw - MARGIN * 2) / CARD_W)
-  const rows = Math.floor((ph - MARGIN * 2) / CARD_H)
-  const perPage = cols * rows
-
-  const cards = deckEntries.value.flatMap(e => Array(e.count).fill(e.card))
-
+  const cardIds = deckEntries.value.flatMap(e => Array(e.count).fill(e.card.id))
   proxyGenerating.value = true
   try {
-    const doc = new jsPDF({
-      orientation: landscape ? 'l' : 'p',
-      unit: 'in',
-      format: paper.value,
-    })
+    const response = await axios.post('/api/drive/proxy-print', {
+      cardIds,
+      paperSize:   proxyPaperSize.value,
+      orientation: proxyOrient.value,
+    }, { responseType: 'blob' })
 
-    for (let i = 0; i < cards.length; i++) {
-      if (i > 0 && i % perPage === 0) doc.addPage()
-      const pos = i % perPage
-      const col = pos % cols
-      const row = Math.floor(pos / cols)
-      const x = MARGIN + col * CARD_W
-      const y = MARGIN + row * CARD_H
-      const card = cards[i]
-      const url = cardImageUrl(card)
-
-      if (url) {
-        try {
-          const imgData = await loadImageBase64(url)
-          doc.addImage(imgData, 'JPEG', x, y, CARD_W, CARD_H)
-        } catch {
-          doc.setDrawColor(180); doc.rect(x, y, CARD_W, CARD_H)
-          doc.setFontSize(7); doc.setTextColor(80)
-          doc.text(card.name ?? '', x + CARD_W / 2, y + CARD_H / 2, { align: 'center', baseline: 'middle' })
-        }
-      } else {
-        doc.setDrawColor(180); doc.rect(x, y, CARD_W, CARD_H)
-        doc.setFontSize(7); doc.setTextColor(80)
-        doc.text(card.name ?? '', x + CARD_W / 2, y + CARD_H / 2, { align: 'center', baseline: 'middle' })
-      }
-    }
-
-    doc.save(`proxies-${deckName.value || 'mazo'}.pdf`)
+    const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    const a   = document.createElement('a')
+    a.href     = url
+    a.download = `proxies-${deckName.value || 'mazo'}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('Error generating PDF', e)
   } finally {
     proxyGenerating.value = false
   }
@@ -887,7 +841,7 @@ async function printProxies() {
           </label>
         </div>
 
-        <p class="proxy-warn"><i class="bi bi-exclamation-triangle"></i> Las cartas sin imagen aparecerán en blanco con su nombre. Si hay problemas de CORS con las imágenes, algunas podrían no cargarse.</p>
+        <p class="proxy-warn"><i class="bi bi-exclamation-triangle"></i> Las cartas sin imagen asignada aparecerán en blanco con su nombre.</p>
         <button class="btn-filled proxy-print-btn" :disabled="proxyCardCount === 0 || proxyGenerating" @click="printProxies">
           <span v-if="proxyGenerating"><i class="bi bi-hourglass-split"></i> Generando PDF…</span>
           <span v-else><i class="bi bi-file-earmark-pdf-fill"></i> Descargar PDF</span>
