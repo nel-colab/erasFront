@@ -428,78 +428,75 @@ const proxyCardsPerPage = computed(() => {
   return cols * rows
 })
 
-function printProxies() {
+const proxyGenerating = ref(false)
+
+function loadImageBase64(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width  = img.naturalWidth
+      canvas.height = img.naturalHeight
+      canvas.getContext('2d').drawImage(img, 0, 0)
+      try { resolve(canvas.toDataURL('image/jpeg', 0.92)) }
+      catch (e) { reject(e) }
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
+
+async function printProxies() {
+  const { jsPDF } = await import('jspdf')
   const paper = PAPER_SIZES.find(p => p.value === proxyPaperSize.value)
   const landscape = proxyOrient.value === 'landscape'
   const pw = landscape ? paper.h : paper.w
-  const usableW = pw - MARGIN * 2
-  const cols = Math.floor(usableW / CARD_W)
+  const ph = landscape ? paper.w : paper.h
+  const cols = Math.floor((pw - MARGIN * 2) / CARD_W)
+  const rows = Math.floor((ph - MARGIN * 2) / CARD_H)
+  const perPage = cols * rows
 
-  // Expand deck entries into individual card slots (repeated by count)
   const cards = deckEntries.value.flatMap(e => Array(e.count).fill(e.card))
 
-  const cardHtml = cards.map(card => {
-    const url = cardImageUrl(card)
-    if (url) {
-      return `<div class="proxy-card"><img src="${url}" alt="${card.name ?? ''}" /></div>`
+  proxyGenerating.value = true
+  try {
+    const doc = new jsPDF({
+      orientation: landscape ? 'l' : 'p',
+      unit: 'in',
+      format: paper.value,
+    })
+
+    for (let i = 0; i < cards.length; i++) {
+      if (i > 0 && i % perPage === 0) doc.addPage()
+      const pos = i % perPage
+      const col = pos % cols
+      const row = Math.floor(pos / cols)
+      const x = MARGIN + col * CARD_W
+      const y = MARGIN + row * CARD_H
+      const card = cards[i]
+      const url = cardImageUrl(card)
+
+      if (url) {
+        try {
+          const imgData = await loadImageBase64(url)
+          doc.addImage(imgData, 'JPEG', x, y, CARD_W, CARD_H)
+        } catch {
+          doc.setDrawColor(180); doc.rect(x, y, CARD_W, CARD_H)
+          doc.setFontSize(7); doc.setTextColor(80)
+          doc.text(card.name ?? '', x + CARD_W / 2, y + CARD_H / 2, { align: 'center', baseline: 'middle' })
+        }
+      } else {
+        doc.setDrawColor(180); doc.rect(x, y, CARD_W, CARD_H)
+        doc.setFontSize(7); doc.setTextColor(80)
+        doc.text(card.name ?? '', x + CARD_W / 2, y + CARD_H / 2, { align: 'center', baseline: 'middle' })
+      }
     }
-    return `<div class="proxy-card proxy-card--blank"><span>${card.name ?? ''}</span></div>`
-  }).join('')
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Proxies – ${deckName.value}</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  @page {
-    size: ${paper.value} ${proxyOrient.value};
-    margin: ${MARGIN}in;
+    doc.save(`proxies-${deckName.value || 'mazo'}.pdf`)
+  } finally {
+    proxyGenerating.value = false
   }
-  body {
-    font-family: sans-serif;
-  }
-  .proxy-grid {
-    display: grid;
-    grid-template-columns: repeat(${cols}, ${CARD_W}in);
-    grid-template-rows: repeat(auto-fill, ${CARD_H}in);
-    gap: 0;
-  }
-  .proxy-card {
-    width: ${CARD_W}in;
-    height: ${CARD_H}in;
-    overflow: hidden;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    border: 1px solid #ccc;
-  }
-  .proxy-card img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .proxy-card--blank {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #f0f0f0;
-    font-size: 10pt;
-    text-align: center;
-    padding: 4px;
-  }
-</style>
-</head>
-<body>
-  <div class="proxy-grid">${cardHtml}</div>
-</body>
-</html>`
-
-  const blob = new Blob([html], { type: 'text/html' })
-  const url  = URL.createObjectURL(blob)
-  const win  = window.open(url, '_blank')
-  win.onload = () => { win.print(); URL.revokeObjectURL(url) }
 }
 
 </script>
@@ -890,9 +887,10 @@ function printProxies() {
           </label>
         </div>
 
-        <p class="proxy-warn"><i class="bi bi-exclamation-triangle"></i> Probablemente deberás configurar tu impresora en la vista de impresión para que las cartas se dispongan de la forma correcta.</p>
-        <button class="btn-filled proxy-print-btn" :disabled="proxyCardCount === 0" @click="printProxies">
-          <i class="bi bi-printer-fill"></i> Abrir vista de impresión
+        <p class="proxy-warn"><i class="bi bi-exclamation-triangle"></i> Las cartas sin imagen aparecerán en blanco con su nombre. Si hay problemas de CORS con las imágenes, algunas podrían no cargarse.</p>
+        <button class="btn-filled proxy-print-btn" :disabled="proxyCardCount === 0 || proxyGenerating" @click="printProxies">
+          <span v-if="proxyGenerating"><i class="bi bi-hourglass-split"></i> Generando PDF…</span>
+          <span v-else><i class="bi bi-file-earmark-pdf-fill"></i> Descargar PDF</span>
         </button>
       </div>
     </div>
