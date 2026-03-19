@@ -395,6 +395,100 @@ watch(deckEntries, () => {
   }
 })
 
+// ── Tools dropdown ─────────────────────────────────────────────────────────
+const showToolsMenu = ref(false)
+
+// ── Proxy print ────────────────────────────────────────────────────────────
+const showProxyModal = ref(false)
+const proxyPaperSize = ref('letter')
+
+const PAPER_SIZES = [
+  { value: 'letter', label: 'Carta (8.5 × 11 in)',   w: 8.5,  h: 11    },
+  { value: 'a4',     label: 'A4 (210 × 297 mm)',      w: 8.27, h: 11.69 },
+  { value: 'legal',  label: 'Legal (8.5 × 14 in)',    w: 8.5,  h: 14    },
+  { value: 'a3',     label: 'A3 (297 × 420 mm)',      w: 11.69,h: 16.54 },
+]
+
+const CARD_W = 2.5  // inches
+const CARD_H = 3.5  // inches
+const MARGIN = 0.25 // inches
+
+const proxyCardCount = computed(() =>
+  deckEntries.value.reduce((s, e) => s + e.count, 0)
+)
+
+function printProxies() {
+  const paper = PAPER_SIZES.find(p => p.value === proxyPaperSize.value)
+  const usableW = paper.w - MARGIN * 2
+  const cols = Math.floor(usableW / CARD_W)
+
+  // Expand deck entries into individual card slots (repeated by count)
+  const cards = deckEntries.value.flatMap(e => Array(e.count).fill(e.card))
+
+  const cardHtml = cards.map(card => {
+    const url = cardImageUrl(card)
+    if (url) {
+      return `<div class="proxy-card"><img src="${url}" alt="${card.name ?? ''}" /></div>`
+    }
+    return `<div class="proxy-card proxy-card--blank"><span>${card.name ?? ''}</span></div>`
+  }).join('')
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Proxies – ${deckName.value}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @page {
+    size: ${paper.value};
+    margin: ${MARGIN}in;
+  }
+  body {
+    font-family: sans-serif;
+  }
+  .proxy-grid {
+    display: grid;
+    grid-template-columns: repeat(${cols}, ${CARD_W}in);
+    grid-template-rows: repeat(auto-fill, ${CARD_H}in);
+    gap: 0;
+  }
+  .proxy-card {
+    width: ${CARD_W}in;
+    height: ${CARD_H}in;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    border: 1px solid #ccc;
+  }
+  .proxy-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .proxy-card--blank {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f0f0f0;
+    font-size: 10pt;
+    text-align: center;
+    padding: 4px;
+  }
+</style>
+</head>
+<body>
+  <div class="proxy-grid">${cardHtml}</div>
+</body>
+</html>`
+
+  const blob = new Blob([html], { type: 'text/html' })
+  const url  = URL.createObjectURL(blob)
+  const win  = window.open(url, '_blank')
+  win.onload = () => { win.print(); URL.revokeObjectURL(url) }
+}
+
 </script>
 
 <template>
@@ -528,9 +622,17 @@ watch(deckEntries, () => {
           <button class="btn-ghost" @click="shareDeck" :disabled="deckEntries.length === 0">
             <i class="bi bi-download"></i> Compartir
           </button>
-          <button class="btn-ghost" disabled title="Próximamente">
-            <i class="bi bi-tools"></i> Herramientas
-          </button>
+          <div class="db-tools-wrap">
+            <button class="btn-ghost" @click="showToolsMenu = !showToolsMenu">
+              <i class="bi bi-tools"></i> Herramientas
+            </button>
+            <div v-if="showToolsMenu" class="db-tools-menu">
+              <button class="db-tools-item" :disabled="deckEntries.length === 0" @click="showProxyModal = true; showToolsMenu = false">
+                <i class="bi bi-printer"></i> Imprimir proxies
+              </button>
+            </div>
+            <div v-if="showToolsMenu" class="db-tools-backdrop" @click="showToolsMenu = false"></div>
+          </div>
         </div>
       </div>
 
@@ -742,6 +844,30 @@ watch(deckEntries, () => {
             <label class="filter-label" for="db-starter">Iniciador</label>
           </div>
         </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Proxy print modal -->
+  <Teleport to="body">
+    <div v-if="showProxyModal" class="proxy-overlay" @click.self="showProxyModal = false">
+      <div class="proxy-modal">
+        <button class="proxy-close" @click="showProxyModal = false">✕</button>
+        <h2 class="proxy-title"><i class="bi bi-printer"></i> Imprimir proxies</h2>
+        <p class="proxy-info">Las cartas se imprimen a <strong>2.5 × 3.5 pulgadas</strong>. Total: <strong>{{ proxyCardCount }}</strong> carta{{ proxyCardCount !== 1 ? 's' : '' }}.</p>
+
+        <label class="proxy-label">Tamaño de papel</label>
+        <div class="proxy-sizes">
+          <label v-for="p in PAPER_SIZES" :key="p.value" class="proxy-size-opt" :class="{ active: proxyPaperSize === p.value }">
+            <input type="radio" :value="p.value" v-model="proxyPaperSize" hidden />
+            <i class="bi bi-file-earmark"></i>
+            {{ p.label }}
+          </label>
+        </div>
+
+        <button class="btn-primary proxy-print-btn" :disabled="proxyCardCount === 0" @click="printProxies">
+          <i class="bi bi-printer-fill"></i> Abrir vista de impresión
+        </button>
       </div>
     </div>
   </Teleport>
@@ -1176,4 +1302,26 @@ watch(deckEntries, () => {
 .adv-modal-body::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* ── Tools dropdown ──────────────────────────────────────────────────────── */
+.db-tools-wrap    { position: relative; }
+.db-tools-backdrop{ position: fixed; inset: 0; z-index: 99; }
+.db-tools-menu    { position: absolute; top: calc(100% + 4px); right: 0; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; box-shadow: var(--card-shadow); min-width: 180px; z-index: 100; padding: 0.25rem; }
+.db-tools-item    { display: flex; align-items: center; gap: 0.5rem; width: 100%; background: none; border: none; color: var(--text-primary); font-size: 0.85rem; padding: 0.45rem 0.65rem; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.db-tools-item:hover:not(:disabled) { background: var(--card-border); }
+.db-tools-item:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Proxy print modal ───────────────────────────────────────────────────── */
+.proxy-overlay  { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 3000; padding: 1rem; }
+.proxy-modal    { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: var(--card-shadow); width: 100%; max-width: 480px; padding: 1.75rem; position: relative; }
+.proxy-close    { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--text-secondary); font-size: 1.1rem; cursor: pointer; line-height: 1; }
+.proxy-close:hover { color: var(--text-primary); }
+.proxy-title    { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem; }
+.proxy-info     { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; }
+.proxy-label    { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+.proxy-sizes    { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1.5rem; }
+.proxy-size-opt { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid var(--card-border); cursor: pointer; font-size: 0.85rem; color: var(--text-primary); transition: border-color 0.15s, background 0.15s; }
+.proxy-size-opt.active { border-color: var(--accent, #7c6cf0); background: rgba(124,108,240,0.08); color: var(--accent, #7c6cf0); }
+.proxy-size-opt:hover:not(.active) { background: var(--card-border); }
+.proxy-print-btn { width: 100%; justify-content: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.9rem; }
 </style>
