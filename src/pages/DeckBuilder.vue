@@ -399,8 +399,9 @@ watch(deckEntries, () => {
 const showToolsMenu = ref(false)
 
 // ── Proxy print ────────────────────────────────────────────────────────────
-const showProxyModal = ref(false)
-const proxyPaperSize = ref('letter')
+const showProxyModal  = ref(false)
+const proxyPaperSize  = ref('letter')
+const proxyOrient     = ref('portrait') // 'portrait' | 'landscape'
 
 const PAPER_SIZES = [
   { value: 'letter', label: 'Carta (8.5 × 11 in)',   w: 8.5,  h: 11    },
@@ -409,17 +410,29 @@ const PAPER_SIZES = [
   { value: 'a3',     label: 'A3 (297 × 420 mm)',      w: 11.69,h: 16.54 },
 ]
 
-const CARD_W = 2.5  // inches
-const CARD_H = 3.5  // inches
-const MARGIN = 0.25 // inches
+const CARD_W = 2.5   // inches
+const CARD_H = 3.5   // inches
+const MARGIN = 0.1   // inches – minimal so max cards fit per page
 
 const proxyCardCount = computed(() =>
   deckEntries.value.reduce((s, e) => s + e.count, 0)
 )
 
+const proxyCardsPerPage = computed(() => {
+  const paper = PAPER_SIZES.find(p => p.value === proxyPaperSize.value)
+  const landscape = proxyOrient.value === 'landscape'
+  const pw = landscape ? paper.h : paper.w
+  const ph = landscape ? paper.w : paper.h
+  const cols = Math.floor((pw - MARGIN * 2) / CARD_W)
+  const rows = Math.floor((ph - MARGIN * 2) / CARD_H)
+  return cols * rows
+})
+
 function printProxies() {
   const paper = PAPER_SIZES.find(p => p.value === proxyPaperSize.value)
-  const usableW = paper.w - MARGIN * 2
+  const landscape = proxyOrient.value === 'landscape'
+  const pw = landscape ? paper.h : paper.w
+  const usableW = pw - MARGIN * 2
   const cols = Math.floor(usableW / CARD_W)
 
   // Expand deck entries into individual card slots (repeated by count)
@@ -441,7 +454,7 @@ function printProxies() {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   @page {
-    size: ${paper.value};
+    size: ${paper.value} ${proxyOrient.value};
     margin: ${MARGIN}in;
   }
   body {
@@ -854,7 +867,19 @@ function printProxies() {
       <div class="proxy-modal">
         <button class="proxy-close" @click="showProxyModal = false">✕</button>
         <h2 class="proxy-title"><i class="bi bi-printer"></i> Imprimir proxies</h2>
-        <p class="proxy-info">Las cartas se imprimen a <strong>2.5 × 3.5 pulgadas</strong>. Total: <strong>{{ proxyCardCount }}</strong> carta{{ proxyCardCount !== 1 ? 's' : '' }}.</p>
+        <p class="proxy-info">Cartas a <strong>2.5 × 3.5 in</strong> &mdash; <strong>{{ proxyCardCount }}</strong> carta{{ proxyCardCount !== 1 ? 's' : '' }}, <strong>{{ proxyCardsPerPage }}</strong> por hoja.</p>
+
+        <label class="proxy-label">Orientación</label>
+        <div class="proxy-orient-row">
+          <label class="proxy-size-opt" :class="{ active: proxyOrient === 'portrait' }">
+            <input type="radio" value="portrait" v-model="proxyOrient" hidden />
+            <i class="bi bi-file-earmark"></i> Vertical
+          </label>
+          <label class="proxy-size-opt" :class="{ active: proxyOrient === 'landscape' }">
+            <input type="radio" value="landscape" v-model="proxyOrient" hidden />
+            <i class="bi bi-file-earmark-text"></i> Horizontal
+          </label>
+        </div>
 
         <label class="proxy-label">Tamaño de papel</label>
         <div class="proxy-sizes">
@@ -1319,9 +1344,11 @@ function printProxies() {
 .proxy-title    { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem; }
 .proxy-info     { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; }
 .proxy-label    { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+.proxy-orient-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.proxy-orient-row .proxy-size-opt { flex: 1; justify-content: center; }
 .proxy-sizes    { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1.5rem; }
-.proxy-size-opt { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid var(--card-border); cursor: pointer; font-size: 0.85rem; color: var(--text-primary); transition: border-color 0.15s, background 0.15s; }
-.proxy-size-opt.active { border-color: var(--accent, #7c6cf0); background: rgba(124,108,240,0.08); color: var(--accent, #7c6cf0); }
-.proxy-size-opt:hover:not(.active) { background: var(--card-border); }
-.proxy-print-btn { width: 100%; justify-content: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.9rem; }
+.proxy-size-opt { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.75rem; border-radius: 6px; border: 1px solid var(--input-border); cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); background: transparent; transition: background-color 0.15s, color 0.15s, border-color 0.15s; user-select: none; }
+.proxy-size-opt.active { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
+.proxy-size-opt:hover:not(.active) { background: var(--input-bg); color: var(--text-primary); }
+.proxy-print-btn { width: 100%; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; }
 </style>
