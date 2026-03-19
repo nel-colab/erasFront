@@ -8,8 +8,9 @@ import { useCardsStore }    from '@/store/cards'
 import { useEditionsStore } from '@/store/editions'
 
 
-import Multiselect from "vue-multiselect"
+import Multiselect       from "vue-multiselect"
 import "vue-multiselect/dist/vue-multiselect.css"
+import CardDetailModal  from '@/components/CardDetailModal.vue'
 
 const cardsStore    = useCardsStore()
 const editionsStore = useEditionsStore()
@@ -318,11 +319,11 @@ const editionVariantIdx = computed(() =>
 
 const prevEditionVariant = () => {
   const i = editionVariantIdx.value
-  if (i > 0) { editingNameId.value = null; detailCard.value = sameNameCards.value[i - 1] }
+  if (i > 0) { detailCard.value = sameNameCards.value[i - 1] }
 }
 const nextEditionVariant = () => {
   const i = editionVariantIdx.value
-  if (i < sameNameCards.value.length - 1) { editingNameId.value = null; detailCard.value = sameNameCards.value[i + 1] }
+  if (i < sameNameCards.value.length - 1) { detailCard.value = sameNameCards.value[i + 1] }
 }
 
 // ── Available filter options (dynamic) ───────────────────────────────────────
@@ -374,7 +375,6 @@ const detailIndex = computed(() =>
 const prevCard = () => {
   const i = detailIndex.value
   if (i > 0) {
-    editingNameId.value = null
     anchorCard.value = displayedCards.value[i - 1]
     detailCard.value = displayedCards.value[i - 1]
   }
@@ -382,7 +382,6 @@ const prevCard = () => {
 const nextCard = () => {
   const i = detailIndex.value
   if (i < displayedCards.value.length - 1) {
-    editingNameId.value = null
     anchorCard.value = displayedCards.value[i + 1]
     detailCard.value = displayedCards.value[i + 1]
   }
@@ -673,8 +672,8 @@ const resolveTokensHtml = (text, collectedKws) => {
   )
 }
 
-const COLOR_NAMES = { B: 'Azúl', G: 'Verde', P: 'Violeta', R: 'Rojo', W: 'Blanco' }
-const mapColors = (colors) => (colors ?? []).map(c => COLOR_NAMES[c] ?? c)
+
+
 
 const renderEffectHtml = (ef) => {
   const parts = []
@@ -757,31 +756,16 @@ const openKeywordEffectModal = (target = 'keywordEffects', idx = null) => {
 
 
 // ── Inline name editing ───────────────────────────────────────────────────────
-const editingNameId = ref(null)
-const editingNameValue = ref('')
-
-const startEditName = (card, event) => {
-  event.stopPropagation()
-  editingNameId.value = card.id
-  editingNameValue.value = card.name
-}
-
-const saveCardName = async (card) => {
-  const name = editingNameValue.value.trim()
-  editingNameId.value = null
-
-  if (!name || name === card.name) return
-
+const saveCardName = async (card, name) => {
+  const trimmed = (name ?? card.name).trim()
+  if (!trimmed || trimmed === card.name) return
   try {
-    await axios.patch(`/api/drive/cards/db/${card.id}/name`, { name })
-
+    await axios.patch(`/api/drive/cards/db/${card.id}/name`, { name: trimmed })
     const dc = driveCards.value.find(c => c.id === card.id)
-    if (dc) dc.name = name
-
+    if (dc) dc.name = trimmed
     if (detailCard.value?.id === card.id) {
-      detailCard.value = { ...detailCard.value, name }
+      detailCard.value = { ...detailCard.value, name: trimmed }
     }
-
   } catch {
     // ignore
   }
@@ -1396,134 +1380,26 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
     <!-- Detail modal                                                       -->
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <Teleport to="body">
-      <div v-if="showDetail" class="modal-overlay" @click.self="closeDetail">
-        <button class="modal-nav modal-nav--prev" @click="prevCard" :disabled="detailIndex <= 0">
-          <i class="bi bi-chevron-left"></i>
-        </button>
-        <div class="modal-box">
-            <div class="modal-name-row">
-              <input
-                v-if="editingNameId === detailCard.id"
-                class="modal-name-input"
-                v-model="editingNameValue"
-                @blur="saveCardName(detailCard)"
-                @keyup.enter="$event.target.blur()"
-                @keyup.escape="editingNameId = null"
-              />
-              <template v-else>
-                <h1 class="modal-card-name">{{ detailCard.name }}</h1>
-                <button v-if="auth.can('manage_cards')" class="btn-modal-edit-name" @click="startEditName(detailCard, $event)" title="Edit name">
-                  <i class="bi bi-pencil"></i>
-                </button>
-              </template>
-            </div>
-            <button class="modal-close" @click="closeDetail">✕</button>
-            <div class="form-with-preview">
-              
-
-              <div class="form-main">
-
-              
-                <div class="modal-info-col">
-                  <div class="modal-top-row">
-                    <div class="modal-edition-nav">
-                      <button
-                        v-if="sameNameCards.length > 1"
-                        class="edition-nav-btn"
-                        :disabled="editionVariantIdx <= 0"
-                        @click="prevEditionVariant"
-                        title="Edición anterior"
-                      ><i class="bi bi-chevron-left"></i></button>
-
-                      <div class="modal-badges">
-                        <span class="badge-edition">{{ detailCard.edition }}</span>
-                        <span v-if="detailCard.sub_edition" class="badge-sub">{{ subLabel(detailCard.sub_edition) }}</span>
-                        <span class="badge-num">#{{ detailCard.number }}</span>
-                        <span class="badge-color" :class="'badge-color--' + (detailCard.color_identity || '').toLowerCase()">{{ colorLabel(detailCard.color_identity) }}</span>
-                      </div>
-
-                      <button
-                        v-if="sameNameCards.length > 1"
-                        class="edition-nav-btn"
-                        :disabled="editionVariantIdx >= sameNameCards.length - 1"
-                        @click="nextEditionVariant"
-                        title="Siguiente edición"
-                      ><i class="bi bi-chevron-right"></i></button>
-                    </div>
-                  </div>
-
-                  <div v-if="!detailCard.meta" class="no-meta-notice">
-                    Carta sin metadatos aun.
-                    <button v-if="auth.can('manage_cards')" class="btn-filled btn-sm" @click="openCreate(detailCard)">Crear</button>
-                  </div>
-
-                  <template v-if="detailCard.meta">
-                    <div class="meta-grid-badges">
-                      <div class="meta-row" v-if="detailCard.meta.cardType"><span class="meta-k">Tipo de carta</span><span class="meta-v">{{ CARD_TYPE_ES[detailCard.meta.cardType] ?? detailCard.meta.cardType }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.cost != null"><span class="meta-k">Coste</span><span class="meta-v">{{ detailCard.meta.cost }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.strength != null"><span class="meta-k">Fuerza</span><span class="meta-v">{{ detailCard.meta.strength }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.level != null"><span class="meta-k">Nivel</span><span class="meta-v">{{ detailCard.meta.level }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.starter == true"><span class="meta-k">Iniciador</span><span class="meta-v">Si</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.cardClasses?.length"><span class="meta-k">Clases</span><span class="meta-v">{{ detailCard.meta.cardClasses.join(', ') }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.regulation"><span class="meta-k">Regulación</span><span class="meta-v">{{ detailCard.meta.regulation }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.specialCost != null"><span class="meta-k">Coste Especial</span><span class="meta-v">{{ detailCard.meta.specialCost }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.specialSummonKind"><span class="meta-k">Método de Invocación Especial</span><span class="meta-v">{{ SS_KIND_ES[detailCard.meta.specialSummonKind] ?? detailCard.meta.specialSummonKind }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.rarity"><span class="meta-k">Rareza</span><span class="meta-v">{{ detailCard.meta.rarity }}</span></div>
-                      <div class="meta-row" v-if="detailCard.meta.colors?.length"><span class="meta-k">Colores</span><span class="meta-v">{{ mapColors(detailCard.meta.colors).join(', ') }}</span></div>
-                      <div class="meta-row meta-row--full" v-if="detailCard.meta.requirement"><span class="meta-k">Requerimiento</span><span class="meta-v">{{ detailCard.meta.requirement }}</span></div>
-                    </div>
-
-                    <div v-if="detailCard.meta.effects?.length || detailCard.meta.keywordEffects?.length" class="effects-section">
-                      <div class="effects-label">Efectos</div>
-                      <div v-for="(ef, i) in detailCard.meta.effects" :key="i" class="effect-pill">
-                        <span v-html="renderEffectHtml(ef)"></span>
-                        <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
-                      </div>
-                      <div v-for="(ke, i) in detailCard.meta.keywordEffects" :key="'kw'+i" class="effect-pill kw-pill">
-                        <span v-html="renderCardKwEffect(ke)"></span>
-                      </div>
-                    </div>
-
-                    <div v-if="detailCard.meta.inheritEffects?.length || detailCard.meta.inheritKeywordEffects?.length" class="effects-section">
-                      <div class="effects-label">Efectos heredados</div>
-                      <div v-for="(ef, i) in detailCard.meta.inheritEffects" :key="i" class="effect-pill">
-                        <span v-html="renderEffectHtml(ef)"></span>
-                        <span v-if="ef.tags?.length" class="effect-tags">{{ ef.tags.join(', ') }}</span>
-                      </div>
-                      <div v-for="(ke, i) in detailCard.meta.inheritKeywordEffects" :key="'ikw'+i" class="effect-pill kw-pill">
-                        <span v-html="renderCardKwEffect(ke)"></span>
-                      </div>
-                    </div>
-                  </template>
-
-                  <div class="modal-actions" v-if="auth.can('manage_cards')">
-                    <button v-if="detailCard.meta" class="btn-filled btn-sm" @click="openEdit(detailCard)">Editar</button>
-                    <button v-if="detailCard.meta" class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardMeta(detailCard)">Eliminar metadatos</button>
-                    <button class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardImage(detailCard)">Eliminar imagen</button>
-                    <button class="btn-ghost btn-sm btn-danger" :disabled="deletingCard" @click="deleteCardBoth(detailCard)">Eliminar todo</button>
-                  </div>
-                </div>
-
-              
-              </div><!-- /form-main -->
-
-            
-              <div class="modal-img-col">
-                <div class="modal-frame">
-                  <img :key="detailCard.id + detailCard.time_stamp"
-                       :src="cardImageUrl(detailCard)"
-                       :alt="detailCard.name" class="modal-img" />
-                </div>
-              </div>
-
-
-
-            </div><!-- /form-with-preview -->
-        </div>
-        <button class="modal-nav modal-nav--next" @click="nextCard" :disabled="detailIndex >= displayedCards.length - 1">
-          <i class="bi bi-chevron-right"></i>
-        </button>
-      </div>
+      <CardDetailModal
+        v-if="showDetail"
+        :card="detailCard"
+        :prev-disabled="detailIndex <= 0"
+        :next-disabled="detailIndex >= displayedCards.length - 1"
+        :same-name-cards="sameNameCards"
+        :edition-variant-idx="editionVariantIdx"
+        :deleting-card="deletingCard"
+        @close="closeDetail"
+        @prev="prevCard"
+        @next="nextCard"
+        @prev-edition="prevEditionVariant"
+        @next-edition="nextEditionVariant"
+        @save-name="name => saveCardName(detailCard, name)"
+        @open-create="openCreate(detailCard)"
+        @open-edit="openEdit(detailCard)"
+        @delete-meta="deleteCardMeta(detailCard)"
+        @delete-image="deleteCardImage(detailCard)"
+        @delete-both="deleteCardBoth(detailCard)"
+      />
     </Teleport>
 
     <!-- ══════════════════════════════════════════════════════════════════ -->

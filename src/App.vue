@@ -7,7 +7,7 @@ const showWelcomeModal = ref(false)
 
 const theme = useThemeStore()
 
-const version = "v1.3.3"
+const version = "v1.4.3"
 
 onMounted(() => {
   theme.init()

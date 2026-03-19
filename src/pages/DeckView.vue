@@ -5,6 +5,7 @@ import axios from 'axios'
 import { useCardsStore } from '@/store/cards'
 import { useAuthStore }  from '@/store/login'
 import CardDetailModal   from '@/components/CardDetailModal.vue'
+import ProxyPrintModal   from '@/components/ProxyPrintModal.vue'
 
 const route      = useRoute()
 const router     = useRouter()
@@ -88,6 +89,9 @@ function goEdit() { router.push(`/deck-builder?id=${route.params.id}`) }
 function goCopy() { router.push(`/deck-builder?id=${route.params.id}&copy=true`) }
 function goBack() { router.back() }
 
+// ── Proxy print ────────────────────────────────────────────────────────────
+const proxyModal = ref(null)
+
 // ── Load ──────────────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
@@ -120,6 +124,9 @@ onMounted(async () => {
       <div class="dv-header-actions">
         <button v-if="canEdit" class="btn-ghost" @click="goEdit">
           <i class="bi bi-pencil"></i> Editar
+        </button>
+        <button class="btn-ghost" @click="proxyModal.open()" :disabled="deckEntries.length === 0">
+          <i class="bi bi-printer"></i> Proxies
         </button>
         <button v-if="canCopy" class="btn-filled" @click="goCopy">
           <i class="bi bi-files"></i> Crear copia
@@ -169,6 +176,8 @@ onMounted(async () => {
       @next="nextCard"
     />
 
+    <ProxyPrintModal ref="proxyModal" :deck-entries="deckEntries" :deck-name="deckData?.deckName" />
+
   </div>
 </template>
 
@@ -200,4 +209,5 @@ onMounted(async () => {
 @media (max-width: 700px) {
   .dv-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
 }
+
 </style>
