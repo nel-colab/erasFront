@@ -890,7 +890,8 @@ function printProxies() {
           </label>
         </div>
 
-        <button class="btn-primary proxy-print-btn" :disabled="proxyCardCount === 0" @click="printProxies">
+        <p class="proxy-warn"><i class="bi bi-exclamation-triangle"></i> Probablemente deberás configurar tu impresora en la vista de impresión para que las cartas se dispongan de la forma correcta.</p>
+        <button class="btn-filled proxy-print-btn" :disabled="proxyCardCount === 0" @click="printProxies">
           <i class="bi bi-printer-fill"></i> Abrir vista de impresión
         </button>
       </div>
@@ -1350,5 +1351,7 @@ function printProxies() {
 .proxy-size-opt { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.75rem; border-radius: 6px; border: 1px solid var(--input-border); cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); background: transparent; transition: background-color 0.15s, color 0.15s, border-color 0.15s; user-select: none; }
 .proxy-size-opt.active { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
 .proxy-size-opt:hover:not(.active) { background: var(--input-bg); color: var(--text-primary); }
+.proxy-warn     { font-size: 0.78rem; color: var(--text-secondary); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 0.5rem 0.65rem; margin-bottom: 0.9rem; line-height: 1.4; }
+.proxy-warn i   { color: #f59e0b; margin-right: 0.3rem; }
 .proxy-print-btn { width: 100%; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; }
 </style>

@@ -18,6 +18,7 @@ import PermissionsManager from '../pages/PermissionsManager.vue'
 import UsersManager from '../pages/UsersManager.vue'
 import Ruling from '../pages/Ruling.vue'
 import NotFound from '../pages/NotFound.vue'
+import DeckView  from '../pages/DeckView.vue'
 
 
 const routes = [
@@ -33,6 +34,7 @@ const routes = [
   { path: '/deck-builder', component: DeckBuilder, alias: ['/DeckBuilder'], meta: { public: true } },
   { path: '/my-decks', component: MyDecks },
   { path: '/public-decks', component: PublicDecks, meta: { public: true } },
+  { path: '/deck/:id',    component: DeckView,    meta: { public: true } },
   { path: '/roles', component: RolesManager },
   { path: '/permissions', component: PermissionsManager },
   { path: '/users-manager', component: UsersManager },
