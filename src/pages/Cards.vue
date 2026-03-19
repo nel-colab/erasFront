@@ -2248,7 +2248,8 @@ input[type="range"]::-moz-range-thumb {
 /* Modal shared */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-  display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+  padding: 1rem; overflow: hidden;
 }
 .modal-overlay--nested { z-index: 1100; background: rgba(0,0,0,0.5); }
 .modal-nav {
@@ -2352,7 +2353,7 @@ input[type="range"]::-moz-range-thumb {
 .modal-info-col { flex: 1; min-width: 0; }
 .modal-top-row { margin-bottom: 0.75rem; }
 .modal-name-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
-.modal-card-name { color: var(--text-primary); margin: 0; font-size: 1.5rem; }
+.modal-card-name { color: var(--text-primary); margin: 0; font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
 .btn-modal-edit-name { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 0; line-height: 1; }
 .btn-modal-edit-name:hover { color: var(--text-primary); }
 .modal-name-input { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); background: var(--input-bg); border: 1px solid #3f51b5; border-radius: 6px; padding: 0 0.4rem; outline: none; width: min(100%, 60%); }
