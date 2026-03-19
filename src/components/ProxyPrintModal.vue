@@ -19,7 +19,6 @@ const PAPER_SIZES = [
   { value: 'letter', label: 'Carta (8.5 × 11 in)',   w: 8.5,   h: 11    },
   { value: 'a4',     label: 'A4 (210 × 297 mm)',      w: 8.27,  h: 11.69 },
   { value: 'legal',  label: 'Legal (8.5 × 14 in)',    w: 8.5,   h: 14    },
-  { value: 'a3',     label: 'A3 (297 × 420 mm)',      w: 11.69, h: 16.54 },
 ]
 const CARD_W      = 2.5
 const CARD_H      = 3.5
@@ -113,7 +112,7 @@ defineExpose({ open: () => { showModal.value = true } })
         </div>
         <p v-if="marginTooSmall" class="proxy-warn proxy-warn--danger">
           <i class="bi bi-exclamation-triangle-fill"></i>
-          El margen es menor al mínimo de Word ({{ MIN_MARGIN }} in). Es posible que tu impresora recorte los bordes.
+          El margen es demasiado pequeño ({{ MIN_MARGIN }} in). Es posible que tu impresora recorte los bordes.
         </p>
 
         <label class="proxy-label">Ajustes de imagen</label>
