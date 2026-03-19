@@ -34,10 +34,15 @@ const loadingCards = ref(false)
 const editions = computed(() => editionsStore.sorted)
 const refData  = computed(() => cardsStore.refData ?? { classes: [], keywordEffects: {} })
 
+function buildCardKey(edition, number, sub, color) {
+  return `${edition}|${number}|${sub ?? ''}|${color ?? ''}`
+}
+
 const metaMap = computed(() => {
   const m = new Map()
   cardsStore.metaCards.forEach(c => {
-    if (c.edition && c.cardNumber != null) m.set(c.edition + '|' + c.cardNumber, c)
+    if (c.edition && c.cardNumber != null)
+      m.set(buildCardKey(c.edition, c.cardNumber, c.subEdition, c.colorIdentity), c)
   })
   return m
 })
@@ -45,7 +50,7 @@ const metaMap = computed(() => {
 const allMerged = computed(() =>
   cardsStore.driveCards.map(dc => ({
     ...dc,
-    meta: metaMap.value.get(dc.edition + '|' + dc.number) ?? null,
+    meta: metaMap.value.get(buildCardKey(dc.edition, dc.number, dc.sub_edition, dc.color_identity)) ?? null,
   }))
 )
 
