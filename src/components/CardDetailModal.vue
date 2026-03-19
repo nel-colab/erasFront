@@ -254,7 +254,7 @@ const renderCardKwEffect = ke => {
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.7);
   display: flex; align-items: center; justify-content: center;
-  z-index: 1000; padding: 1rem; overflow: hidden;
+  z-index: 1000; padding: 4.5rem 1rem 1rem; overflow: hidden;
 }
 .modal-nav {
   position: fixed; top: 50%; transform: translateY(-50%);
@@ -272,7 +272,7 @@ const renderCardKwEffect = ke => {
 .modal-box {
   background: var(--card-bg); border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow); border-radius: 12px;
-  width: 100%; max-width: 1440px; max-height: calc(100vh - 2rem);
+  width: 100%; max-width: 1440px; max-height: calc(100vh - 6rem);
   overflow-y: auto; padding: 1.5rem; position: relative;
   transition: background-color 0.2s ease;
 }
