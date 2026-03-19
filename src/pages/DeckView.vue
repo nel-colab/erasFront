@@ -93,6 +93,8 @@ const showProxyModal  = ref(false)
 const proxyPaperSize  = ref('letter')
 const proxyOrient     = ref('portrait')
 const proxyGenerating = ref(false)
+const proxyBrightness = ref(20)
+const proxyContrast   = ref(20)
 
 const PAPER_SIZES = [
   { value: 'letter', label: 'Carta (8.5 × 11 in)',   w: 8.5,   h: 11    },
@@ -123,6 +125,8 @@ async function printProxies() {
       cardIds,
       paperSize:   proxyPaperSize.value,
       orientation: proxyOrient.value,
+      brightness:  proxyBrightness.value,
+      contrast:    proxyContrast.value,
     }, { responseType: 'blob' })
 
     const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
@@ -251,6 +255,18 @@ onMounted(async () => {
             </label>
           </div>
 
+          <label class="proxy-label">Ajustes de imagen</label>
+          <div class="proxy-adjust-row">
+            <span class="proxy-adjust-lbl">Brillo</span>
+            <input type="range" v-model.number="proxyBrightness" min="-100" max="100" step="5" class="proxy-slider" />
+            <span class="proxy-adjust-val">{{ proxyBrightness > 0 ? '+' : '' }}{{ proxyBrightness }}</span>
+          </div>
+          <div class="proxy-adjust-row">
+            <span class="proxy-adjust-lbl">Contraste</span>
+            <input type="range" v-model.number="proxyContrast" min="-100" max="100" step="5" class="proxy-slider" />
+            <span class="proxy-adjust-val">{{ proxyContrast > 0 ? '+' : '' }}{{ proxyContrast }}</span>
+          </div>
+
           <p class="proxy-warn"><i class="bi bi-exclamation-triangle"></i> Las cartas sin imagen asignada aparecerán en blanco con su nombre.</p>
           <button class="btn-filled proxy-print-btn" :disabled="proxyCardCount === 0 || proxyGenerating" @click="printProxies">
             <span v-if="proxyGenerating"><i class="bi bi-hourglass-split"></i> Generando PDF…</span>
@@ -306,7 +322,11 @@ onMounted(async () => {
 .proxy-size-opt { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.75rem; border-radius: 6px; border: 1px solid var(--input-border); cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); background: transparent; transition: background-color 0.15s, color 0.15s, border-color 0.15s; user-select: none; }
 .proxy-size-opt.active { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
 .proxy-size-opt:hover:not(.active) { background: var(--input-bg); color: var(--text-primary); }
-.proxy-warn     { font-size: 0.78rem; color: var(--text-secondary); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 0.5rem 0.65rem; margin-bottom: 0.9rem; line-height: 1.4; }
+.proxy-adjust-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+.proxy-adjust-lbl { font-size: 0.82rem; color: var(--text-secondary); width: 5rem; flex-shrink: 0; }
+.proxy-slider { flex: 1; accent-color: var(--btn-bg); cursor: pointer; }
+.proxy-adjust-val { font-size: 0.82rem; color: var(--text-primary); font-weight: 600; width: 2.5rem; text-align: right; flex-shrink: 0; }
+.proxy-warn     { font-size: 0.78rem; color: var(--text-secondary); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 0.5rem 0.65rem; margin-top: 0.5rem; margin-bottom: 0.9rem; line-height: 1.4; }
 .proxy-warn i   { color: #f59e0b; margin-right: 0.3rem; }
 .proxy-print-btn { width: 100%; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; }
 </style>
