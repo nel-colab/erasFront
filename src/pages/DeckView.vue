@@ -152,10 +152,7 @@ const renderCardKwEffect = ke => {
 
 // ── Permissions ──────────────────────────────────────────────────────────
 const canEdit = computed(() =>
-  deckData.value && (
-    auth.userId === deckData.value.userId ||
-    auth.can('manage_decks')
-  )
+  deckData.value && auth.userId === deckData.value.userId
 )
 const canCopy = computed(() => !!auth.userId)
 
@@ -370,7 +367,7 @@ onMounted(async () => {
 
 /* ── Badges ──────────────────────────────────────────────────────────────── */
 .modal-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-.badge-edition, .badge-color, .badge-sub, .badge-num { font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 20px; letter-spacing: 0.04em; }
+.badge-edition, .badge-color, .badge-sub, .badge-num { font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 6px; letter-spacing: 0.04em; }
 .badge-edition { background: #2a2a2a; color: var(--text-muted); }
 .badge-num     { background: #2a2a2a; color: var(--text-muted); border: 1px solid var(--card-border); }
 .badge-sub     { background: #2a2a2a; color: var(--text-muted); border: 1px solid var(--card-border); }

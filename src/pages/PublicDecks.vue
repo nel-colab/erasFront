@@ -110,7 +110,7 @@ const visibleDecks = computed(() => {
           <div class="md-author">por {{ deck.username }}</div>
           <div class="md-actions">
             <button class="md-btn md-btn-edit" @click="editDeck(deck)" title="Revisar mazo">
-              <i class="bi bi-pencil-fill"></i> Revisar
+              <i class="bi bi-eye-fill"></i> Revisar
             </button>
           </div>
         </div>

@@ -2254,8 +2254,8 @@ input[type="range"]::-moz-range-thumb {
 .modal-nav {
   position: fixed; top: 50%; transform: translateY(-50%);
   z-index: 1001; background: rgba(0,0,0,0.45); border: none;
-  color: #fff; font-size: 2rem; width: 3rem; height: 5rem;
-  border-radius: 8px; cursor: pointer; display: flex;
+  color: #fff; font-size: 2rem; width: 3rem; height: 3rem;
+  border-radius: 50%; cursor: pointer; display: flex;
   align-items: center; justify-content: center;
   transition: background 0.15s, opacity 0.15s;
 }

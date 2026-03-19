@@ -130,7 +130,7 @@ const visibleDecks = computed(() => {
             <button class="md-btn md-btn-view" @click="router.push(`/deck/${deck.id}`)" title="Revisar mazo">
               <i class="bi bi-eye-fill"></i> Revisar
             </button>
-            <button v-if="canManageDecks" class="md-btn md-btn-edit" @click="editDeck(deck)" title="Editar mazo">
+            <button v-if="auth.userId === deck.userId" class="md-btn md-btn-edit" @click="editDeck(deck)" title="Editar mazo">
               <i class="bi bi-pencil-fill"></i> Editar
             </button>
             <button class="md-btn md-btn-delete"
