@@ -76,8 +76,8 @@ const fSpecialSummon  = ref('')
 const fStarter        = ref(false)
 
 const classes                 = computed(() => (refData.value.classes ?? []).slice().sort())
-const availableTypes          = computed(() => [...new Set(metaCards.value.map(c => c.cardType).filter(Boolean))].sort())
-const availableSpecialSummons = computed(() => [...new Set(metaCards.value.map(c => c.specialSummonKind).filter(Boolean))].sort())
+const availableTypes          = computed(() => [...new Set(cardsStore.metaCards.map(c => c.cardType).filter(Boolean))].sort())
+const availableSpecialSummons = computed(() => [...new Set(cardsStore.metaCards.map(c => c.specialSummonKind).filter(Boolean))].sort())
 const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'White' }[c] ?? c)
 
 const advFiltersActive = computed(() =>
