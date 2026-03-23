@@ -415,7 +415,7 @@ const openCreate = (driveCard = null) => {
   editingMetaId.value = null
   form.value = blankForm()
   if (driveCard) {
-    form.value.edition       = driveCard.edition        || ''
+    form.value.edition       = driveCard.sub_edition ? `${driveCard.edition}.${driveCard.sub_edition}` : (driveCard.edition || '')
     form.value.colorIdentity = driveCard.color_identity || ''
     form.value.cardNumber    = driveCard.number         ?? null
     form.value.cardName      = driveCard.name           || ''
