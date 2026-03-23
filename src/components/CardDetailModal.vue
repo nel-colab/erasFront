@@ -46,7 +46,7 @@ function cancelName() {
 // ── Constants ─────────────────────────────────────────────────────────────
 const CARD_TYPE_ES = { creature: 'Criatura', utility: 'Utilidad', structure: 'Estructura' }
 const SS_KIND_ES   = { materialization: 'Materialización', promotion: 'Ascenso', ritual: 'Ritual', evolution: 'Evolución' }
-const COLOR_NAMES  = { B: 'Azúl', G: 'Verde', P: 'Violeta', R: 'Rojo', W: 'Blanco' }
+const COLOR_NAMES  = { B: 'Azul', G: 'Verde', P: 'Violeta', R: 'Rojo', W: 'Blanco' }
 
 const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'White' }[c] ?? c)
 const editionLabel = (edition, sub) => sub ? `${edition}.${sub}` : edition
