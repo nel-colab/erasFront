@@ -415,7 +415,7 @@ const openCreate = (driveCard = null) => {
   editingMetaId.value = null
   form.value = blankForm()
   if (driveCard) {
-    form.value.edition       = driveCard.edition        || ''
+    form.value.edition       = driveCard.sub_edition ? `${driveCard.edition}.${driveCard.sub_edition}` : (driveCard.edition || '')
     form.value.colorIdentity = driveCard.color_identity || ''
     form.value.cardNumber    = driveCard.number         ?? null
     form.value.cardName      = driveCard.name           || ''
@@ -458,7 +458,7 @@ const openEdit = card => {
   form.value = {
     cardName:          m?.cardName          ?? card.name           ?? '',
     cardType:          m?.cardType          ?? null,
-    edition:           card.edition         ?? '',
+    edition:           card.sub_edition ? `${card.edition}.${card.sub_edition}` : (card.edition ?? ''),
     colorIdentity:     m?.colorIdentity     ?? card.color_identity ?? '',
     cardNumber:        m?.cardNumber        ?? card.number         ?? null,
     strength:          m?.strength          ?? null,
@@ -494,9 +494,14 @@ const saveCard = async () => {
   if (!form.value.edition.trim())  { formError.value = 'Edition is required';   return }
   if (!form.value.cardName.trim()) { formError.value = 'Card name is required'; return }
 
+  const editionRaw = form.value.edition.trim()
+  const dotIdx     = editionRaw.indexOf('.')
+  const editionBase  = dotIdx >= 0 ? editionRaw.substring(0, dotIdx) : editionRaw
+  const subEdition   = dotIdx >= 0 ? editionRaw.substring(dotIdx + 1) : null
+
   const payload = {
     cardName: form.value.cardName, cardType: form.value.cardType || null,
-    edition: form.value.edition, colorIdentity: form.value.colorIdentity || null,
+    edition: editionBase, subEdition, colorIdentity: form.value.colorIdentity || null,
     cardNumber:    form.value.cardNumber    != null ? Number(form.value.cardNumber)    : null,
     strength:      form.value.strength      != null ? Number(form.value.strength)      : null,
     cost:          form.value.cost          != null ? Number(form.value.cost)          : null,

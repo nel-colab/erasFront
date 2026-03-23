@@ -49,7 +49,7 @@ const SS_KIND_ES   = { materialization: 'Materialización', promotion: 'Ascenso'
 const COLOR_NAMES  = { B: 'Azul', G: 'Verde', P: 'Violeta', R: 'Rojo', W: 'Blanco' }
 
 const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'White' }[c] ?? c)
-const subLabel   = s => (s === null || s === '') ? 'MAIN' : `SUB${s}`
+const editionLabel = (edition, sub) => sub ? `${edition}.${sub}` : edition
 const mapColors  = colors => (colors ?? []).map(c => COLOR_NAMES[c] ?? c)
 
 const cardImageUrl = card => {
@@ -161,8 +161,7 @@ const renderCardKwEffect = ke => {
                   ><i class="bi bi-chevron-left"></i></button>
 
                   <div class="modal-badges">
-                    <span class="badge-edition">{{ card.edition }}</span>
-                    <span v-if="card.sub_edition" class="badge-sub">{{ subLabel(card.sub_edition) }}</span>
+                    <span class="badge-edition">{{ editionLabel(card.edition, card.sub_edition) }}</span>
                     <span class="badge-num">#{{ card.number }}</span>
                     <span class="badge-color" :class="'badge-color--' + (card.color_identity || '').toLowerCase()">
                       {{ colorLabel(card.color_identity) }}
