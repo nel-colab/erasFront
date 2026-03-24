@@ -160,11 +160,20 @@ const visibleCards = computed(() => {
   const strengthFull    = fStrengthMin.value === 0 && fStrengthMax.value === STRENGTH_MAX
   const specCostFull    = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
 
+  const [fEdBase, fEdSub] = fEdition.value.includes('.')
+    ? fEdition.value.split('.') : [fEdition.value, null]
+
   return allMerged.value
     // Edition filter (client-side — store loads all editions)
-    .filter(c => !fEdition.value || c.edition === fEdition.value)
-    // Sub-edition filter
     .filter(c => {
+      if (!fEdition.value) return true
+      if (!fEdBase || c.edition !== fEdBase) return false
+      if (fEdSub !== null) return (c.sub_edition ?? '') === fEdSub
+      return true
+    })
+    // Sub-edition filter (only applied when edition filter has no sub-edition component)
+    .filter(c => {
+      if (fEdSub !== null) return true          // already handled above
       if (fSubEdition.value === null) return true
       if (fSubEdition.value === '') return c.sub_edition === null || c.sub_edition === ''
       return c.sub_edition === fSubEdition.value
@@ -976,9 +985,18 @@ const metaListCards = computed(() => {
   const specCostFull = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
   const allColors    = fColors.value.length === COLOR_IDENTITIES.length
 
+  const [fEdBase2, fEdSub2] = fEdition.value.includes('.')
+    ? fEdition.value.split('.') : [fEdition.value, null]
+
   return metaCards.value
-    .filter(c => !fEdition.value || c.edition === fEdition.value)
     .filter(c => {
+      if (!fEdition.value) return true
+      if (!fEdBase2 || c.edition !== fEdBase2) return false
+      if (fEdSub2 !== null) return (c.subEdition ?? '') === fEdSub2
+      return true
+    })
+    .filter(c => {
+      if (fEdSub2 !== null) return true
       if (fSubEdition.value === null) return true
       if (fSubEdition.value === '') return !c.subEdition
       return c.subEdition === fSubEdition.value
