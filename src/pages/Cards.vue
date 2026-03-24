@@ -167,13 +167,13 @@ const visibleCards = computed(() => {
     // Edition filter (client-side — store loads all editions)
     .filter(c => {
       if (!fEdition.value) return true
-      if (!fEdBase || c.edition !== fEdBase) return false
-      if (fEdSub !== null) return (c.sub_edition ?? '') === fEdSub
-      return true
+      if (c.edition !== fEdBase) return false
+      const cardSub = c.sub_edition ?? ''
+      return fEdSub !== null ? cardSub === fEdSub : cardSub === ''
     })
-    // Sub-edition filter (only applied when edition filter has no sub-edition component)
+    // Sub-edition filter (only applied when no edition is selected)
     .filter(c => {
-      if (fEdSub !== null) return true          // already handled above
+      if (fEdition.value) return true
       if (fSubEdition.value === null) return true
       if (fSubEdition.value === '') return c.sub_edition === null || c.sub_edition === ''
       return c.sub_edition === fSubEdition.value
@@ -291,8 +291,10 @@ const collapsedCards = computed(() => {
     if (!existing) {
       newest.set(name, card)
     } else {
-      const edDate = editionReleaseMap.value.get(card.edition) || ''
-      const exDate = editionReleaseMap.value.get(existing.edition) || ''
+      const fullEd   = card.sub_edition     ? `${card.edition}.${card.sub_edition}`         : card.edition
+      const fullEx   = existing.sub_edition ? `${existing.edition}.${existing.sub_edition}`  : existing.edition
+      const edDate   = editionReleaseMap.value.get(fullEd) || ''
+      const exDate   = editionReleaseMap.value.get(fullEx) || ''
       if (edDate > exDate) newest.set(name, card)
     }
   })
@@ -991,12 +993,12 @@ const metaListCards = computed(() => {
   return metaCards.value
     .filter(c => {
       if (!fEdition.value) return true
-      if (!fEdBase2 || c.edition !== fEdBase2) return false
-      if (fEdSub2 !== null) return (c.subEdition ?? '') === fEdSub2
-      return true
+      if (c.edition !== fEdBase2) return false
+      const cardSub = c.subEdition ?? ''
+      return fEdSub2 !== null ? cardSub === fEdSub2 : cardSub === ''
     })
     .filter(c => {
-      if (fEdSub2 !== null) return true
+      if (fEdition.value) return true
       if (fSubEdition.value === null) return true
       if (fSubEdition.value === '') return !c.subEdition
       return c.subEdition === fSubEdition.value
@@ -1361,7 +1363,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
           No se encontraron cartas{{ anyFilterActive ? ' para los filtros actuales' : '' }}.
         </div>
         <div v-if="displayedCards.length > 0" class="cp-count">
-          {{ displayedCards.length }} carta{{ displayedCards.length !== 1 ? 's' : '' }}
+          {{ collapsedCards.length }} carta{{ collapsedCards.length !== 1 ? 's' : '' }}
           <span v-if="anyFilterActive"> (filtradas)</span>
           <button class="btn-ghost btn-sm" style="margin-left:0.75rem" @click="showMetaList = true">
             <i class="bi bi-table"></i> Ver lista de metadatos ({{ metaListCards.length }})
