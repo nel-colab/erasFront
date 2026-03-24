@@ -129,7 +129,13 @@ const searchResults = computed(() => {
     .filter(c => !fSpecialSummon.value || c.meta?.specialSummonKind === fSpecialSummon.value)
     .filter(c => !fRarity.value.length || fRarity.value.includes(c.meta?.rarity))
     .filter(c => !fStarter.value || c.meta?.starter === true)
-    .filter(c => !fEdition.value || c.edition === fEdition.value)
+    .filter(c => {
+      if (!fEdition.value) return true
+      const [edBase, edSub] = fEdition.value.includes('.') ? fEdition.value.split('.') : [fEdition.value, null]
+      if (c.edition !== edBase) return false
+      if (edSub !== null) return (c.sub_edition ?? '') === edSub
+      return true
+    })
 })
 
 const visibleCards = computed(() => {
