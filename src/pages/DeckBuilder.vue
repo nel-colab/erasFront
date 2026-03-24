@@ -133,8 +133,8 @@ const searchResults = computed(() => {
       if (!fEdition.value) return true
       const [edBase, edSub] = fEdition.value.includes('.') ? fEdition.value.split('.') : [fEdition.value, null]
       if (c.edition !== edBase) return false
-      if (edSub !== null) return (c.sub_edition ?? '') === edSub
-      return true
+      const cardSub = c.sub_edition ?? ''
+      return edSub !== null ? cardSub === edSub : cardSub === ''
     })
 })
 
