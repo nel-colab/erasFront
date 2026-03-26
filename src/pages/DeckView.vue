@@ -45,6 +45,8 @@ const cardImageUrl = card => {
 }
 
 // ── Resolve deck into entries ─────────────────────────────────────────────
+const TYPE_ORDER = { creature: 0, structure: 1, utility: 2 }
+
 function resolveDeck(data) {
   deckData.value = data
   const countMap = {}
@@ -54,6 +56,15 @@ function resolveDeck(data) {
     const card = allMerged.value.find(c => c.id === cId)
     if (card) entries.push({ card, count })
   }
+  entries.sort((a, b) => {
+    const ta = TYPE_ORDER[a.card.meta?.cardType] ?? 99
+    const tb = TYPE_ORDER[b.card.meta?.cardType] ?? 99
+    if (ta !== tb) return ta - tb
+    const la = a.card.meta?.level ?? 0
+    const lb = b.card.meta?.level ?? 0
+    if (la !== lb) return la - lb
+    return (a.card.number ?? 0) - (b.card.number ?? 0)
+  })
   deckEntries.value = entries
 }
 

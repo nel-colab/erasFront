@@ -203,14 +203,41 @@ const makeDeckImage = card => {
   dirty.value = true
 }
 
+const TYPE_ORDER = { creature: 0, structure: 1, utility: 2 }
+const sortEntries = entries =>
+  [...entries].sort((a, b) => {
+    const ta = TYPE_ORDER[a.card.meta?.cardType] ?? 99
+    const tb = TYPE_ORDER[b.card.meta?.cardType] ?? 99
+    if (ta !== tb) return ta - tb
+    const la = a.card.meta?.level ?? 0
+    const lb = b.card.meta?.level ?? 0
+    if (la !== lb) return la - lb
+    return (a.card.number ?? 0) - (b.card.number ?? 0)
+  })
+
 const deckGrouped = computed(() => {
+  const TYPE_LABEL_ORDER = ['creature', 'structure', 'utility']
   const g = {}
   deckEntries.value.forEach(e => {
     const type = e.card.meta?.cardType ?? 'sin tipo'
     if (!g[type]) g[type] = []
     g[type].push(e)
   })
-  return g
+  // Sort entries within each group by level then cardNumber
+  Object.keys(g).forEach(t => {
+    g[t].sort((a, b) => {
+      const la = a.card.meta?.level ?? 0
+      const lb = b.card.meta?.level ?? 0
+      if (la !== lb) return la - lb
+      return (a.card.number ?? 0) - (b.card.number ?? 0)
+    })
+  })
+  // Return groups in creature → structure → utility order
+  const ordered = {}
+  ;[...TYPE_LABEL_ORDER, ...Object.keys(g).filter(t => !TYPE_LABEL_ORDER.includes(t))].forEach(t => {
+    if (g[t]) ordered[t] = g[t]
+  })
+  return ordered
 })
 
 // ── Drag & drop ───────────────────────────────────────────────────────────
