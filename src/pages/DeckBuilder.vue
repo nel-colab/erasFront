@@ -148,7 +148,7 @@ const selectCard   = card => { selectedCard.value = card }
 
 // ── Deck state ────────────────────────────────────────────────────────────
 const deckId      = ref(null)
-const deckName    = ref('Nuevo mazoA')
+const deckName    = ref('Nuevo mazo')
 const deckEntries = ref([])
 const savedState  = ref(null)
 const dirty       = ref(false)
