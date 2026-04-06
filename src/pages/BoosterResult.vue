@@ -89,15 +89,6 @@ const pickByProb = (options) => {
   return parseInt(options[options.length - 1]?.quantity) || 0
 }
 
-const simulatePack = (packType, rarityGroups) => {
-  const picked = []
-  for (const r of ['C', 'UC', 'R', 'SR', 'SEC']) {
-    const n = packType.cardsPerRarity?.[r] ?? 0
-    if (n > 0) picked.push(...pickRandom(rarityGroups[r] || [], n))
-  }
-  return picked
-}
-
 // ── Result state ──────────────────────────────────────────────────────────────
 // entries: [{ driveCard, meta, rarity, count }] sorted by rarity then cardNumber
 const resultEntries = ref([])
