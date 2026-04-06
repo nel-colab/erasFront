@@ -183,43 +183,42 @@ const closeSimulate = () => {
 // but totalPacks is authoritative for the label)
 const simBoxTotalPacks = computed(() => simulatingEd.value?.boxConfig?.totalPacks ?? 0)
 
-// Picks a pack type name from the box PROB distribution (same logic as BoosterResult)
+// Simulate one full box, then pick one random pack from it (reflects true odds)
 const pickRandomPackFromBox = (ed) => {
-  const entries = ed.boxConfig?.entries ?? []
-  // Build a weighted list: FIXED entries appear at their quantity weight,
-  // PROB entries use their probability options, FLEX fills the rest.
-  // For "random pack" we just draw one pack from the box distribution:
-  // compute expected composition then pick one proportionally.
-  const weights = []
-  const totalPacks = ed.boxConfig?.totalPacks ?? 1
+  const entries    = ed.boxConfig?.entries ?? []
+  const totalPacks = ed.boxConfig?.totalPacks ?? 0
+  if (!totalPacks || !entries.length) return ed.packTypes?.[0]?.name ?? ''
 
-  for (const entry of entries) {
-    const pt = ed.packTypes?.find(p => p.name === entry.packTypeName)
-    if (!pt) continue
-    let expectedCount = 0
-    if (entry.mode === 'FIXED') {
-      expectedCount = entry.quantity || 0
-    } else if (entry.mode === 'PROB') {
-      // expected value of the prob distribution
-      expectedCount = (entry.probOptions || []).reduce((s, o) => s + (o.quantity || 0) * (o.prob || 0), 0)
-    } else if (entry.mode === 'FLEX') {
-      // flex fills whatever is left; approximate as remainder
-      const fixedSum = entries.filter(e => e.mode === 'FIXED').reduce((s, e) => s + (e.quantity || 0), 0)
-      const probExpected = entries.filter(e => e.mode === 'PROB').reduce((s, e) =>
-        s + (e.probOptions || []).reduce((ps, o) => ps + (o.quantity || 0) * (o.prob || 0), 0), 0)
-      expectedCount = Math.max(0, totalPacks - fixedSum - probExpected)
+  // Build the pool of pack names exactly as BoosterResult does
+  const pool = []
+
+  // 1. FIXED
+  for (const entry of entries.filter(e => e.mode === 'FIXED')) {
+    for (let i = 0; i < (entry.quantity || 0); i++) pool.push(entry.packTypeName)
+  }
+
+  // 2. PROB — roll each entry's distribution
+  for (const entry of entries.filter(e => e.mode === 'PROB')) {
+    if (!entry.probOptions?.length) continue
+    let rand = Math.random()
+    let cumulative = 0
+    let chosen = entry.probOptions[entry.probOptions.length - 1].quantity
+    for (const opt of entry.probOptions) {
+      cumulative += parseFloat(opt.prob) || 0
+      if (rand <= cumulative) { chosen = opt.quantity || 0; break }
     }
-    if (expectedCount > 0) weights.push({ name: pt.name, weight: expectedCount })
+    for (let i = 0; i < chosen; i++) pool.push(entry.packTypeName)
   }
 
-  if (!weights.length) return ed.packTypes?.[0]?.name ?? ''
-  const total = weights.reduce((s, w) => s + w.weight, 0)
-  let rand = Math.random() * total
-  for (const w of weights) {
-    rand -= w.weight
-    if (rand <= 0) return w.name
+  // 3. FLEX — fill remainder
+  const flexEntry = entries.find(e => e.mode === 'FLEX')
+  if (flexEntry) {
+    const remaining = Math.max(0, totalPacks - pool.length)
+    for (let i = 0; i < remaining; i++) pool.push(flexEntry.packTypeName)
   }
-  return weights[weights.length - 1].name
+
+  if (!pool.length) return ed.packTypes?.[0]?.name ?? ''
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 const simOpenPack = () => {
