@@ -148,7 +148,7 @@ const selectCard   = card => { selectedCard.value = card }
 
 // ── Deck state ────────────────────────────────────────────────────────────
 const deckId      = ref(null)
-const deckName    = ref('Nuevo mazo')
+const deckName    = ref('Nuevo mazoA')
 const deckEntries = ref([])
 const savedState  = ref(null)
 const dirty       = ref(false)
@@ -303,6 +303,79 @@ const shareDeck = () => {
   URL.revokeObjectURL(url)
 }
 
+// ── Import deck from .txt ──────────────────────────────────────────────────
+const importError   = ref('')
+const importWarnings = ref([])
+
+const importDeck = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.txt'
+  input.onchange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    parseImport(text, file.name.replace(/\.txt$/, ''))
+  }
+  input.click()
+}
+
+const parseImport = (text, fallbackName) => {
+  importError.value = ''
+  importWarnings.value = []
+
+  // Parse header for deck name
+  const nameMatch = text.match(/^Mazo:\s*(.+)/m)
+  if (nameMatch) deckName.value = nameMatch[1].trim()
+  else if (fallbackName) deckName.value = fallbackName
+
+  // Parse card lines: "  Nx Name (EDITION #NUMBER)"
+  // edition may contain dots e.g. E1.1
+  const cardLineRe = /^\s+(\d+)x\s+(.+?)\s+\(([^)]+)\s+#(\d+)\)\s*$/
+  const newEntries = []
+  const warnings   = []
+
+  for (const line of text.split('\n')) {
+    const m = line.match(cardLineRe)
+    if (!m) continue
+    const [, countStr, name, edition, numberStr] = m
+    const count  = parseInt(countStr)
+    const number = parseInt(numberStr)
+
+    // Try to match against loaded drive cards (by name + edition + number)
+    const dotIdx  = edition.indexOf('.')
+    const edBase  = dotIdx >= 0 ? edition.substring(0, dotIdx) : edition
+    const edSub   = dotIdx >= 0 ? edition.substring(dotIdx + 1) : null
+
+    const found = allMerged.value.find(dc => {
+      if ((dc.name || '').toLowerCase() !== name.toLowerCase()) return false
+      if (dc.edition !== edBase) return false
+      if (dc.number !== number) return false
+      if (edSub !== null) return (dc.sub_edition ?? '') === edSub
+      return (dc.sub_edition ?? '') === ''
+    })
+
+    if (!found) {
+      warnings.push(`No encontrada: ${count}x ${name} (${edition} #${number})`)
+      continue
+    }
+
+    // Find existing entry or create new
+    const existing = newEntries.find(e => e.card.id === found.id)
+    if (existing) existing.count += count
+    else newEntries.push({ card: found, count: Math.min(count, MAX_COPIES) })
+  }
+
+  if (newEntries.length === 0 && warnings.length > 0) {
+    importError.value = 'No se encontraron cartas. ¿Es el archivo correcto?'
+    return
+  }
+
+  deckEntries.value = newEntries
+  dirty.value = true
+  importWarnings.value = warnings
+}
+
 // ── Effect rendering ───────────────────────────────────────────────────────
 const escapeHtml = s => s ? s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''
 const getKwDesc  = kwKey => refData.value.keywordEffects?.[kwKey]?.displayText || null
@@ -364,10 +437,11 @@ const resolveDeck = (data, copy) => {
     const card = allMerged.value.find(c => c.id === cId)
     if (card) entries.push({ card, count })
   }
-  deckEntries.value = entries
-  savedState.value  = JSON.parse(JSON.stringify(entries))
+  deckEntries.value  = entries
+  savedState.value   = JSON.parse(JSON.stringify(entries))
   // deckImage is now stored as a URL directly
-  deckImage.value   = data.deckImage || (entries[0]?.card ? cardImageUrl(entries[0].card) : null)
+  deckImage.value    = data.deckImage || (entries[0]?.card ? cardImageUrl(entries[0].card) : null)
+  privateDeck.value  = data.privateDeck ?? false
 
   if (copy === 'true') {
     deckId.value    = null
@@ -565,9 +639,6 @@ const proxyModal = ref(null)
               <i class="bi bi-arrow-counterclockwise"></i>
             </button>
           </div>
-          <button class="btn-ghost" @click="shareDeck" :disabled="deckEntries.length === 0">
-            <i class="bi bi-download"></i> Compartir
-          </button>
           <div class="db-tools-wrap">
             <button class="btn-ghost" @click="showToolsMenu = !showToolsMenu">
               <i class="bi bi-tools"></i> Herramientas
@@ -576,6 +647,12 @@ const proxyModal = ref(null)
               <button class="db-tools-item" :disabled="deckEntries.length === 0" @click="proxyModal.open(); showToolsMenu = false">
                 <i class="bi bi-printer"></i> Imprimir proxies
               </button>
+              <button class="db-tools-item" :disabled="deckEntries.length === 0" @click="shareDeck(); showToolsMenu = false">
+                <i class="bi bi-download"></i> Exportar lista
+              </button>
+              <button class="db-tools-item" @click="importDeck(); showToolsMenu = false">
+                <i class="bi bi-upload"></i> Importar lista
+              </button>
             </div>
             <div v-if="showToolsMenu" class="db-tools-backdrop" @click="showToolsMenu = false"></div>
           </div>
@@ -583,6 +660,15 @@ const proxyModal = ref(null)
       </div>
 
       <div class="db-deck-count">{{ totalCards }}</div>
+
+      <!-- Import feedback -->
+      <div v-if="importError" class="db-import-error">{{ importError }}</div>
+      <div v-if="importWarnings.length" class="db-import-warnings">
+        <div class="db-import-warnings-title">
+          {{ importWarnings.length }} carta{{ importWarnings.length !== 1 ? 's' : '' }} no encontrada{{ importWarnings.length !== 1 ? 's' : '' }}:
+        </div>
+        <div v-for="w in importWarnings" :key="w" class="db-import-warning-line">{{ w }}</div>
+      </div>
 
       <!-- Drop zone + grid -->
       <div class="db-deck-scroll"
@@ -938,6 +1024,11 @@ const proxyModal = ref(null)
 .db-discard-btn:disabled { opacity: 0.35; cursor: default; }
 
 .db-deck-count { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; padding-bottom: 0.2rem; }
+
+.db-import-error { font-size: 0.8rem; color: var(--error-color); padding: 0.4rem 0.5rem; background: rgba(220,53,69,0.1); border-radius: 6px; margin-bottom: 0.4rem; }
+.db-import-warnings { font-size: 0.75rem; color: #f59e0b; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 6px; padding: 0.4rem 0.5rem; margin-bottom: 0.4rem; display: flex; flex-direction: column; gap: 0.15rem; }
+.db-import-warnings-title { font-weight: 700; margin-bottom: 0.1rem; }
+.db-import-warning-line { opacity: 0.85; }
 
 .db-deck-scroll { flex: 1; overflow-y: auto; padding-bottom: 0.9rem; }
 

@@ -62,11 +62,21 @@ const groupByRarity = (cards) => {
   return g
 }
 
+// With replacement — each slot is an independent pick
 const pickRandom = (arr, n) => {
   if (!arr.length || n <= 0) return []
   const result = []
   for (let i = 0; i < n; i++) result.push(arr[Math.floor(Math.random() * arr.length)])
   return result
+}
+
+const simulatePack = (packType, rarityGroups) => {
+  const picked = []
+  for (const r of ['C', 'UC', 'R', 'SR', 'SEC']) {
+    const n = packType.cardsPerRarity?.[r] ?? 0
+    if (n > 0) picked.push(...pickRandom(rarityGroups[r] || [], n))
+  }
+  return picked
 }
 
 const pickByProb = (options) => {
