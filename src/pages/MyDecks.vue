@@ -137,7 +137,7 @@ const visibleDecks = computed(() => {
               @click="deleteDeck(deck)"
               :disabled="deleting === deck.id"
               title="Eliminar mazo">
-              <i class="bi bi-trash-fill"></i>
+              <i class="bi bi-trash-fill"></i> Borrar
             </button>
           </div>
         </div>
@@ -253,7 +253,9 @@ const visibleDecks = computed(() => {
 
 .md-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
 }
 .md-btn {
   border: none;
@@ -272,7 +274,6 @@ const visibleDecks = computed(() => {
 .md-btn-edit {
   background: #3f51b5;
   color: #fff;
-  flex: 1;
 }
 .md-btn-edit:hover:not(:disabled) { background: #5c6bc0; }
 .md-btn-delete {
