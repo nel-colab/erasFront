@@ -24,19 +24,13 @@ const auth = useAuthStore()
 
 const sidebarOpen = ref(true)
 
-// ── Constants (hardcoded by game rules) ───────────────────────────────────────
-const CARD_TYPES   = ['creature', 'utility', 'structure']
-const CARD_TYPE_ES = { creature: 'Criatura', utility: 'Utilidad', structure: 'Estructura' }
-const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
-const SS_KINDS     = ['materialization', 'promotion', 'ritual', 'evolution']
-const SS_KIND_ES   = { materialization: 'Materialización', promotion: 'Ascenso', ritual: 'Ritual', evolution: 'Evolución' }
-const USAGE_LIMITS = ['once per turn', 'once per turn between copies', 'ultimate effect']
+// ── Constants (labels / fixed ordering, not data-derived) ────────────────────
+const CARD_TYPE_ES   = { creature: 'Criatura', utility: 'Utilidad', structure: 'Estructura' }
+const SS_KIND_ES     = { materialization: 'Materialización', promotion: 'Ascenso', ritual: 'Ritual', evolution: 'Evolución' }
+const USAGE_LIMITS   = ['once per turn', 'once per turn between copies', 'ultimate effect']
 const USAGE_LIMIT_ES = { 'once per turn': 'una vez por turno', 'once per turn between copies': 'una vez por turno entre copias', 'ultimate effect': 'efecto definitivo' }
-const RARITIES = ['C', 'UC', 'R', 'SR', 'SEC']
-const COST_MAX          = 8
-const LEVEL_MAX         = 12
-const STRENGTH_MAX      = 15
-const SPECIAL_COST_MAX  = 5
+const COLOR_FIXED_ORDER  = ['B', 'G', 'P', 'R', 'W']
+const RARITY_FIXED_ORDER = ['C', 'UC', 'R', 'SR', 'SEC']
 
 // ── Ref data (classes, instances, kinds, tags) ────────────────────────────────
 
@@ -59,21 +53,17 @@ const loadingDrive = ref(false)
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 const fEdition        = ref('')
-const fColors         = ref([...COLOR_IDENTITIES])  // included colors; all = no filter
-const fColorMatchMode = ref('any')                  // 'any' = colorIdentity OR colors list; 'identity' = colorIdentity only
-const fSubEdition     = ref(null)   // null = all, '' = MAIN, '1'/'2'/… = SUBn
+const fColors         = ref([])   // empty = all colors
+const fColorMatchMode = ref('any')
+const fSubEdition     = ref(null)
 const fName           = ref('')
 const fType           = ref('')
 const fStarter        = ref(false)
-const cardSize        = ref(200) // px, for responsive grid
-const fCostMin        = ref(0)
-const fCostMax        = ref(COST_MAX)
-const fLevelMin       = ref(0)
-const fLevelMax       = ref(LEVEL_MAX)
-const fStrengthMin    = ref(0)
-const fStrengthMax    = ref(STRENGTH_MAX)
-const fSpecialCostMin = ref(0)
-const fSpecialCostMax = ref(SPECIAL_COST_MAX)
+const cardSize        = ref(200)
+const fCostMin        = ref(0); const fCostMax        = ref(999)
+const fLevelMin       = ref(0); const fLevelMax       = ref(999)
+const fStrengthMin    = ref(0); const fStrengthMax    = ref(999)
+const fSpecialCostMin = ref(0); const fSpecialCostMax = ref(999)
 const fSpecialSummon  = ref('')
 const fRequirement    = ref('')
 const fCardNumber     = ref('')
@@ -106,16 +96,51 @@ function sortVal(c) {
 
 const toggleSortDir = () => { sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc' }
 
+// ── Dynamic filter ranges from full dataset ───────────────────────────────────
+const availableColorIdentities = computed(() => {
+  const s = new Set(driveCards.value.map(c => c.color_identity).filter(Boolean))
+  return COLOR_FIXED_ORDER.filter(c => s.has(c))
+})
+const availableRarities = computed(() => {
+  const s = new Set(metaCards.value.map(c => c.rarity).filter(Boolean))
+  return RARITY_FIXED_ORDER.filter(r => s.has(r))
+})
+const maxCost = computed(() =>
+  metaCards.value.reduce((m, c) => c.cost != null ? Math.max(m, c.cost) : m, 0))
+const maxLevel = computed(() =>
+  metaCards.value.reduce((m, c) => c.level != null ? Math.max(m, c.level) : m, 0))
+const maxStrength = computed(() =>
+  metaCards.value.reduce((m, c) => c.strength != null ? Math.max(m, c.strength) : m, 0))
+const maxSpecialCost = computed(() =>
+  metaCards.value.reduce((m, c) => c.specialCost != null ? Math.max(m, c.specialCost) : m, 0))
+
+// Initialise slider maxes once data loads
+watch(maxCost,        val => { if (val > 0 && fCostMax.value        >= 999) fCostMax.value        = val }, { immediate: true })
+watch(maxLevel,       val => { if (val > 0 && fLevelMax.value       >= 999) fLevelMax.value       = val }, { immediate: true })
+watch(maxStrength,    val => { if (val > 0 && fStrengthMax.value    >= 999) fStrengthMax.value    = val }, { immediate: true })
+watch(maxSpecialCost, val => { if (val > 0 && fSpecialCostMax.value >= 999) fSpecialCostMax.value = val }, { immediate: true })
+
+const clearFilters = () => {
+  fEdition.value = ''; fColors.value = []; fColorMatchMode.value = 'any'
+  fSubEdition.value = null; fName.value = ''; fType.value = ''; fStarter.value = false
+  fCostMin.value = 0; fCostMax.value = 999
+  fLevelMin.value = 0; fLevelMax.value = 999
+  fStrengthMin.value = 0; fStrengthMax.value = 999
+  fSpecialCostMin.value = 0; fSpecialCostMax.value = 999
+  fSpecialSummon.value = ''; fRequirement.value = ''; fCardNumber.value = ''
+  fRarity.value = []; fClases.value = []; fKeywordEffects.value = []; fEffectTags.value = []
+}
+
 const anyFilterActive = computed(() =>
-  !!(fEdition.value || fColors.value.length < COLOR_IDENTITIES.length ||
+  !!(fEdition.value || fColors.value.length > 0 ||
      fSubEdition.value !== null || fName.value || fType.value || fStarter.value ||
      fRequirement.value || fCardNumber.value || fRarity.value.length ||
      fClases.value.length || fKeywordEffects.value.length || fEffectTags.value.length ||
      fSpecialSummon.value ||
-     fCostMin.value > 0 || fCostMax.value < COST_MAX ||
-     fLevelMin.value > 0 || fLevelMax.value < LEVEL_MAX ||
-     fStrengthMin.value > 0 || fStrengthMax.value < STRENGTH_MAX ||
-     fSpecialCostMin.value > 0 || fSpecialCostMax.value < SPECIAL_COST_MAX))
+     fCostMin.value > 0 || fCostMax.value < maxCost.value ||
+     fLevelMin.value > 0 || fLevelMax.value < maxLevel.value ||
+     fStrengthMin.value > 0 || fStrengthMax.value < maxStrength.value ||
+     (maxSpecialCost.value > 0 && (fSpecialCostMin.value > 0 || fSpecialCostMax.value < maxSpecialCost.value))))
 
 
 const gridStyle = computed(() => ({
@@ -154,11 +179,11 @@ const allMerged  = computed(() =>
 )}))
 )
 const visibleCards = computed(() => {
-  const allColors       = fColors.value.length === COLOR_IDENTITIES.length
-  const costFull        = fCostMin.value === 0 && fCostMax.value === COST_MAX
-  const levelFull       = fLevelMin.value === 0 && fLevelMax.value === LEVEL_MAX
-  const strengthFull    = fStrengthMin.value === 0 && fStrengthMax.value === STRENGTH_MAX
-  const specCostFull    = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
+  const allColors       = fColors.value.length === 0
+  const costFull        = fCostMin.value === 0 && fCostMax.value >= maxCost.value
+  const levelFull       = fLevelMin.value === 0 && fLevelMax.value >= maxLevel.value
+  const strengthFull    = fStrengthMin.value === 0 && fStrengthMax.value >= maxStrength.value
+  const specCostFull    = fSpecialCostMin.value === 0 && fSpecialCostMax.value >= maxSpecialCost.value
 
   const [fEdBase, fEdSub] = fEdition.value.includes('.')
     ? fEdition.value.split('.') : [fEdition.value, null]
@@ -981,11 +1006,11 @@ function uniqueDriveCard(card) {
 }
 
 const metaListCards = computed(() => {
-  const costFull     = fCostMin.value === 0 && fCostMax.value === COST_MAX
-  const levelFull    = fLevelMin.value === 0 && fLevelMax.value === LEVEL_MAX
-  const strengthFull = fStrengthMin.value === 0 && fStrengthMax.value === STRENGTH_MAX
-  const specCostFull = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
-  const allColors    = fColors.value.length === COLOR_IDENTITIES.length
+  const costFull     = fCostMin.value === 0 && fCostMax.value >= maxCost.value
+  const levelFull    = fLevelMin.value === 0 && fLevelMax.value >= maxLevel.value
+  const strengthFull = fStrengthMin.value === 0 && fStrengthMax.value >= maxStrength.value
+  const specCostFull = fSpecialCostMin.value === 0 && fSpecialCostMax.value >= maxSpecialCost.value
+  const allColors    = fColors.value.length === 0
 
   const [fEdBase2, fEdSub2] = fEdition.value.includes('.')
     ? fEdition.value.split('.') : [fEdition.value, null]
@@ -1150,9 +1175,9 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
           <div class="filter-group">
             <label class="filter-label">Color</label>
             <div class="filter-chips filter-chips--colors">
-              <button v-for="c in COLOR_IDENTITIES" :key="c" class="chip chip--color"
-                :class="['color-' + c.toLowerCase(), { active: fColors.includes(c) }]"
-                @click="() => { if (fColors.length === COLOR_IDENTITIES.length) { fColors = [c] } else if (fColors.includes(c)) { const next = fColors.filter(x => x !== c); fColors = next.length ? next : [...COLOR_IDENTITIES] } else { fColors = [...fColors, c] } }">{{ colorLabel(c) }}</button>
+              <button v-for="c in availableColorIdentities" :key="c" class="chip chip--color"
+                :class="['color-' + c.toLowerCase(), { active: fColors.length === 0 || fColors.includes(c) }]"
+                @click="() => { if (fColors.length === 0) { fColors = [c] } else if (fColors.includes(c)) { const next = fColors.filter(x => x !== c); fColors = next } else { const next = [...fColors, c]; fColors = next.length >= availableColorIdentities.length ? [] : next } }">{{ colorLabel(c) }}</button>
             </div>
             <div class="filter-mode-toggle">
               <button class="mode-btn" :class="{ active: fColorMatchMode === 'any' }" @click="fColorMatchMode = 'any'">Cualquier color</button>
@@ -1179,47 +1204,46 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
           </div>
 
           <!-- Coste -->
-          <div class="filter-group">
+          <div v-if="maxCost > 0" class="filter-group">
             <label class="filter-label">
-              Coste<span v-if="fCostMin > 0 || fCostMax < COST_MAX"> ({{ fCostMin }}–{{ fCostMax }})</span><span v-else> (Todos)</span>
+              Coste<span v-if="fCostMin > 0 || fCostMax < maxCost"> ({{ fCostMin }}–{{ fCostMax }})</span><span v-else> (Todos)</span>
             </label>
             <div class="dual-range"
-              :style="{ '--pct-min': (fCostMin / COST_MAX * 100) + '%', '--pct-max': (fCostMax / COST_MAX * 100) + '%' }">
+              :style="{ '--pct-min': (fCostMin / maxCost * 100) + '%', '--pct-max': (Math.min(fCostMax, maxCost) / maxCost * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" max="8" step="1" v-model.number="fCostMin"
+              <input type="range" min="0" :max="maxCost" step="1" v-model.number="fCostMin"
                 @input="fCostMax = fCostMin > fCostMax ? fCostMin : fCostMax" />
-              <input type="range" min="0" max="8" step="1" v-model.number="fCostMax"
+              <input type="range" min="0" :max="maxCost" step="1" v-model.number="fCostMax"
                 @input="fCostMin = fCostMax < fCostMin ? fCostMax : fCostMin" />
             </div>
           </div>
 
           <!-- Nivel -->
-          <div class="filter-group">
+          <div v-if="maxLevel > 0" class="filter-group">
             <label class="filter-label">
-              Nivel<span v-if="fLevelMin > 0 || fLevelMax < LEVEL_MAX"> ({{ fLevelMin }}–{{ fLevelMax }})</span><span v-else> (Todos)</span>
+              Nivel<span v-if="fLevelMin > 0 || fLevelMax < maxLevel"> ({{ fLevelMin }}–{{ fLevelMax }})</span><span v-else> (Todos)</span>
             </label>
-            
             <div class="dual-range"
-              :style="{ '--pct-min': (fLevelMin / LEVEL_MAX * 100) + '%', '--pct-max': (fLevelMax / LEVEL_MAX * 100) + '%' }">
+              :style="{ '--pct-min': (fLevelMin / maxLevel * 100) + '%', '--pct-max': (Math.min(fLevelMax, maxLevel) / maxLevel * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" :max="LEVEL_MAX" step="1" v-model.number="fLevelMin"
+              <input type="range" min="0" :max="maxLevel" step="1" v-model.number="fLevelMin"
                 @input="fLevelMax = fLevelMin > fLevelMax ? fLevelMin : fLevelMax" />
-              <input type="range" min="0" :max="LEVEL_MAX" step="1" v-model.number="fLevelMax"
+              <input type="range" min="0" :max="maxLevel" step="1" v-model.number="fLevelMax"
                 @input="fLevelMin = fLevelMax < fLevelMin ? fLevelMax : fLevelMin" />
             </div>
           </div>
 
           <!-- Fuerza -->
-          <div class="filter-group">
+          <div v-if="maxStrength > 0" class="filter-group">
             <label class="filter-label">
-              Fuerza<span v-if="fStrengthMin > 0 || fStrengthMax < STRENGTH_MAX"> ({{ fStrengthMin }}–{{ fStrengthMax }})</span><span v-else> (Todos)</span>
+              Fuerza<span v-if="fStrengthMin > 0 || fStrengthMax < maxStrength"> ({{ fStrengthMin }}–{{ fStrengthMax }})</span><span v-else> (Todos)</span>
             </label>
             <div class="dual-range"
-              :style="{ '--pct-min': (fStrengthMin / STRENGTH_MAX * 100) + '%', '--pct-max': (fStrengthMax / STRENGTH_MAX * 100) + '%' }">
+              :style="{ '--pct-min': (fStrengthMin / maxStrength * 100) + '%', '--pct-max': (Math.min(fStrengthMax, maxStrength) / maxStrength * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" :max="STRENGTH_MAX" step="1" v-model.number="fStrengthMin"
+              <input type="range" min="0" :max="maxStrength" step="1" v-model.number="fStrengthMin"
                 @input="fStrengthMax = fStrengthMin > fStrengthMax ? fStrengthMin : fStrengthMax" />
-              <input type="range" min="0" :max="STRENGTH_MAX" step="1" v-model.number="fStrengthMax"
+              <input type="range" min="0" :max="maxStrength" step="1" v-model.number="fStrengthMax"
                 @input="fStrengthMin = fStrengthMax < fStrengthMin ? fStrengthMax : fStrengthMin" />
             </div>
           </div>
@@ -1234,16 +1258,16 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
           </div>
 
           <!-- Coste especial -->
-          <div class="filter-group">
+          <div v-if="maxSpecialCost > 0" class="filter-group">
             <label class="filter-label">
-              Coste especial<span v-if="fSpecialCostMin > 0 || fSpecialCostMax < SPECIAL_COST_MAX"> ({{ fSpecialCostMin }}–{{ fSpecialCostMax }})</span><span v-else> (Todos)</span>
+              Coste especial<span v-if="fSpecialCostMin > 0 || fSpecialCostMax < maxSpecialCost"> ({{ fSpecialCostMin }}–{{ fSpecialCostMax }})</span><span v-else> (Todos)</span>
             </label>
             <div class="dual-range"
-              :style="{ '--pct-min': (fSpecialCostMin / SPECIAL_COST_MAX * 100) + '%', '--pct-max': (fSpecialCostMax / SPECIAL_COST_MAX * 100) + '%' }">
+              :style="{ '--pct-min': (fSpecialCostMin / maxSpecialCost * 100) + '%', '--pct-max': (Math.min(fSpecialCostMax, maxSpecialCost) / maxSpecialCost * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" :max="SPECIAL_COST_MAX" step="1" v-model.number="fSpecialCostMin"
+              <input type="range" min="0" :max="maxSpecialCost" step="1" v-model.number="fSpecialCostMin"
                 @input="fSpecialCostMax = fSpecialCostMin > fSpecialCostMax ? fSpecialCostMin : fSpecialCostMax" />
-              <input type="range" min="0" :max="SPECIAL_COST_MAX" step="1" v-model.number="fSpecialCostMax"
+              <input type="range" min="0" :max="maxSpecialCost" step="1" v-model.number="fSpecialCostMax"
                 @input="fSpecialCostMin = fSpecialCostMax < fSpecialCostMin ? fSpecialCostMax : fSpecialCostMin" />
             </div>
           </div>
@@ -1286,7 +1310,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
           <div class="filter-group">
             <label class="filter-label">Rareza</label>
             <div class="filter-chips">
-              <button v-for="r in RARITIES" :key="r" class="chip"
+              <button v-for="r in availableRarities" :key="r" class="chip"
                 :class="{ active: fRarity.includes(r) }"
                 @click="fRarity = fRarity.includes(r) ? fRarity.filter(x => x !== r) : [...fRarity, r]">{{ r }}</button>
             </div>
@@ -1365,6 +1389,9 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
         <div v-if="displayedCards.length > 0" class="cp-count">
           {{ collapsedCards.length }} carta{{ collapsedCards.length !== 1 ? 's' : '' }}
           <span v-if="anyFilterActive"> (filtradas)</span>
+          <button v-if="anyFilterActive" class="btn-ghost btn-sm" style="margin-left:0.5rem;color:#f87171" @click="clearFilters">
+            <i class="bi bi-x-circle"></i> Limpiar filtros
+          </button>
           <button class="btn-ghost btn-sm" style="margin-left:0.75rem" @click="showMetaList = true">
             <i class="bi bi-table"></i> Ver lista de metadatos ({{ metaListCards.length }})
           </button>
@@ -1448,7 +1475,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
             <div class="form-field">
               <label>Tipo</label>
               <select v-model="form.cardType">
-                <option v-for="t in CARD_TYPES" :key="t" :value="t">{{ CARD_TYPE_ES[t] ?? t }}</option>
+                <option v-for="t in ['creature','utility','structure']" :key="t" :value="t">{{ CARD_TYPE_ES[t] ?? t }}</option>
               </select>
             </div>
             <div class="form-field">
@@ -1458,7 +1485,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
             <div class="form-field">
               <label>Identidad de color</label>
               <select v-model="form.colorIdentity">
-                <option v-for="c in COLOR_IDENTITIES" :key="c" :value="c">{{ c }}</option>
+                <option v-for="c in COLOR_FIXED_ORDER" :key="c" :value="c">{{ c }}</option>
               </select>
             </div>
 
@@ -1466,7 +1493,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
             <div class="form-field form-field--full">
               <label>Colores <span class="field-hint">(puede ser más de uno)</span></label>
               <div class="color-chips-row">
-                <button v-for="c in COLOR_IDENTITIES" :key="c" type="button"
+                <button v-for="c in COLOR_FIXED_ORDER" :key="c" type="button"
                   class="chip chip--color"
                   :class="['color-' + c.toLowerCase(), { active: form.colors.includes(c) }]"
                   @click="form.colors = form.colors.includes(c) ? form.colors.filter(x => x !== c) : [...form.colors, c]">{{ colorLabel(c) }}</button>
@@ -1504,7 +1531,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
             <div class="form-field form-field--s2">
               <label>Rareza</label>
               <select v-model="form.rarity">
-                <option v-for="r in RARITIES" :key="r" :value="r">{{ r }}</option>
+                <option v-for="r in RARITY_FIXED_ORDER" :key="r" :value="r">{{ r }}</option>
               </select>
             </div>
 
@@ -1513,7 +1540,7 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
               <label>Método de invoación especial</label>
               <select v-model="form.specialSummonKind">
                 <option :value="null">— none —</option>
-                <option v-for="k in SS_KINDS" :key="k" :value="k">{{ SS_KIND_ES[k] ?? k }}</option>
+                <option v-for="k in ['materialization','promotion','ritual','evolution']" :key="k" :value="k">{{ SS_KIND_ES[k] ?? k }}</option>
               </select>
             </div>
 
