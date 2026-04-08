@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
 import { useAuthStore }    from '@/store/login'
@@ -22,12 +22,8 @@ const LOAD_MORE   = 40
 
 
 // ── Constants ─────────────────────────────────────────────────────────────
-const COLOR_IDENTITIES = ['B', 'G', 'P', 'R', 'W']
-const CARD_TYPES       = ['creature', 'utility', 'structure']
-const COST_MAX         = 8
-const LEVEL_MAX        = 12
-const SPECIAL_COST_MAX = 5
-const RARITIES         = ['C', 'UC', 'R', 'SR', 'SEC']
+const COLOR_FIXED_ORDER  = ['B', 'G', 'P', 'R', 'W']
+const RARITY_FIXED_ORDER = ['C', 'UC', 'R', 'SR', 'SEC']
 
 // ── Card data (from store) ─────────────────────────────────────────────────
 const loadingCards = ref(false)
@@ -69,78 +65,157 @@ const showAdvModal     = ref(false)   // advanced filters as modal
 const quickType        = ref('')
 
 // Advanced filters
-const fColors         = ref([...COLOR_IDENTITIES])
+// empty fColors = all colors active
+const fColors         = ref([])
 const fColorMatchMode = ref('any')
 const fType           = ref('')
 const fEdition        = ref('')
 const fClases         = ref([])
 const fRarity         = ref([])
-const fCostMin        = ref(0); const fCostMax        = ref(COST_MAX)
-const fLevelMin       = ref(0); const fLevelMax       = ref(LEVEL_MAX)
-const fSpecialCostMin = ref(0); const fSpecialCostMax = ref(SPECIAL_COST_MAX)
+const fCostMin        = ref(0); const fCostMax        = ref(999)
+const fLevelMin       = ref(0); const fLevelMax       = ref(999)
+const fStrengthMin    = ref(0); const fStrengthMax    = ref(999)
+const fSpecialCostMin = ref(0); const fSpecialCostMax = ref(999)
 const fSpecialSummon  = ref('')
 const fStarter        = ref(false)
 
-const classes                 = computed(() => (refData.value.classes ?? []).slice().sort())
-const availableTypes          = computed(() => [...new Set(cardsStore.metaCards.map(c => c.cardType).filter(Boolean))].sort())
-const availableSpecialSummons = computed(() => [...new Set(cardsStore.metaCards.map(c => c.specialSummonKind).filter(Boolean))].sort())
 const colorLabel = c => ({ B: 'Blue', G: 'Green', P: 'Purple', R: 'Red', W: 'White' }[c] ?? c)
+const typeLabel  = t => ({ creature: 'Criatura', structure: 'Estructura', utility: 'Utilidad' }[t] ?? t)
+const ssLabel    = s => ({ evolution: 'Evolución', materialization: 'Materialización', promotion: 'Ascenso', ritual: 'Ritual' }[s] ?? s)
 
-const advFiltersActive = computed(() =>
-  fColors.value.length < COLOR_IDENTITIES.length || fType.value || fEdition.value ||
-  fClases.value.length || fRarity.value.length || fStarter.value || fSpecialSummon.value ||
-  fCostMin.value > 0 || fCostMax.value < COST_MAX ||
-  fLevelMin.value > 0 || fLevelMax.value < LEVEL_MAX ||
-  fSpecialCostMin.value > 0 || fSpecialCostMax.value < SPECIAL_COST_MAX
-)
-
-const resetAdvFilters = () => {
-  fColors.value = [...COLOR_IDENTITIES]; fColorMatchMode.value = 'any'
-  fType.value = ''; fEdition.value = ''; fClases.value = []; fRarity.value = []
-  fCostMin.value = 0; fCostMax.value = COST_MAX
-  fLevelMin.value = 0; fLevelMax.value = LEVEL_MAX
-  fSpecialCostMin.value = 0; fSpecialCostMax.value = SPECIAL_COST_MAX
-  fSpecialSummon.value = ''; fStarter.value = false
-}
-
-const searchResults = computed(() => {
-  const q         = searchQuery.value.toLowerCase().trim()
-  const allColors = fColors.value.length === COLOR_IDENTITIES.length
-  const costFull  = fCostMin.value === 0 && fCostMax.value === COST_MAX
-  const lvlFull   = fLevelMin.value === 0 && fLevelMax.value === LEVEL_MAX
-  const scFull    = fSpecialCostMin.value === 0 && fSpecialCostMax.value === SPECIAL_COST_MAX
-
-  return allMerged.value
-    .filter(c => !q || (c.name ?? '').toLowerCase().includes(q) || (c.edition ?? '').toLowerCase().includes(q))
+// ── Centralized filter logic ───────────────────────────────────────────────
+// skip: Set of dimension names to exclude (for computing per-dimension options)
+const filterCards = (cards, skip = new Set()) => {
+  const q       = searchQuery.value.toLowerCase().trim()
+  const allClrs  = fColors.value.length === 0
+  const costFull = fCostMin.value === 0 && fCostMax.value >= maxCost.value
+  const lvlFull  = fLevelMin.value === 0 && fLevelMax.value >= maxLevel.value
+  const strFull  = fStrengthMin.value === 0 && fStrengthMax.value >= maxStrength.value
+  const scFull   = fSpecialCostMin.value === 0 && fSpecialCostMax.value >= maxSpecialCost.value
+  return cards
+    .filter(c => skip.has('query') || !q || (c.name ?? '').toLowerCase().includes(q) || (c.edition ?? '').toLowerCase().includes(q))
     .filter(c => {
+      if (skip.has('type')) return true
       const t = quickType.value || fType.value
       return !t || c.meta?.cardType?.toLowerCase() === t.toLowerCase()
     })
     .filter(c => {
-      if (allColors) return true
+      if (skip.has('color') || allClrs) return true
       const cols = [...new Set([c.color_identity, ...(c.meta?.colors ?? [])].filter(Boolean))]
       if (!cols.length) return true
       return cols.some(col => fColors.value.includes(col))
     })
-    .filter(c => !fClases.value.length || c.meta?.cardClasses?.some(cl => fClases.value.includes(cl)))
-    .filter(c => { if (costFull) return true; const v = c.meta?.cost; return v == null || (v >= fCostMin.value && v <= fCostMax.value) })
-    .filter(c => { if (lvlFull) return true; const v = c.meta?.level; return v == null || (v >= fLevelMin.value && v <= fLevelMax.value) })
-    .filter(c => { if (scFull) return true; const v = c.meta?.specialCost; return v != null && v >= fSpecialCostMin.value && v <= fSpecialCostMax.value })
-    .filter(c => !fSpecialSummon.value || c.meta?.specialSummonKind === fSpecialSummon.value)
-    .filter(c => !fRarity.value.length || fRarity.value.includes(c.meta?.rarity))
-    .filter(c => !fStarter.value || c.meta?.starter === true)
+    .filter(c => skip.has('classes') || !fClases.value.length || c.meta?.cardClasses?.some(cl => fClases.value.includes(cl)))
+    .filter(c => { if (skip.has('cost') || costFull) return true; const v = c.meta?.cost; return v == null || (v >= fCostMin.value && v <= fCostMax.value) })
+    .filter(c => { if (skip.has('level') || lvlFull) return true; const v = c.meta?.level; return v == null || (v >= fLevelMin.value && v <= fLevelMax.value) })
+    .filter(c => { if (skip.has('strength') || strFull) return true; const v = c.meta?.strength; return v == null || (v >= fStrengthMin.value && v <= fStrengthMax.value) })
+    .filter(c => { if (skip.has('specialCost') || scFull) return true; const v = c.meta?.specialCost; return v != null && v >= fSpecialCostMin.value && v <= fSpecialCostMax.value })
+    .filter(c => skip.has('specialSummon') || !fSpecialSummon.value || c.meta?.specialSummonKind === fSpecialSummon.value)
+    .filter(c => skip.has('rarity') || !fRarity.value.length || fRarity.value.includes(c.meta?.rarity))
+    .filter(c => skip.has('starter') || !fStarter.value || c.meta?.starter === true)
     .filter(c => {
-      if (!fEdition.value) return true
+      if (skip.has('edition') || !fEdition.value) return true
       const [edBase, edSub] = fEdition.value.includes('.') ? fEdition.value.split('.') : [fEdition.value, null]
       if (c.edition !== edBase) return false
       const cardSub = c.sub_edition ?? ''
       return edSub !== null ? cardSub === edSub : cardSub === ''
     })
+}
+
+const searchResults = computed(() => filterCards(allMerged.value))
+
+// ── Static filter options (derived from full dataset, not filtered subset) ─
+const availableColorIdentities = computed(() => {
+  const s = new Set(allMerged.value.map(c => c.color_identity).filter(Boolean))
+  return COLOR_FIXED_ORDER.filter(c => s.has(c))
+})
+const availableRarities = computed(() => {
+  const s = new Set(cardsStore.metaCards.map(c => c.rarity).filter(Boolean))
+  return RARITY_FIXED_ORDER.filter(r => s.has(r))
+})
+const availableTypes = computed(() => {
+  const s = new Set(cardsStore.metaCards.map(c => c.cardType).filter(Boolean))
+  return [...s].sort()
+})
+const classes = computed(() => {
+  const s = new Set(cardsStore.metaCards.flatMap(c => c.cardClasses ?? []))
+  return [...s].sort()
+})
+const availableSpecialSummons = computed(() => {
+  const s = new Set(cardsStore.metaCards.map(c => c.specialSummonKind).filter(Boolean))
+  return [...s].sort()
+})
+const maxCost = computed(() =>
+  cardsStore.metaCards.reduce((m, c) => c.cost != null ? Math.max(m, c.cost) : m, 0)
+)
+const maxLevel = computed(() =>
+  cardsStore.metaCards.reduce((m, c) => c.level != null ? Math.max(m, c.level) : m, 0)
+)
+const maxStrength = computed(() =>
+  cardsStore.metaCards.reduce((m, c) => c.strength != null ? Math.max(m, c.strength) : m, 0)
+)
+const maxSpecialCost = computed(() =>
+  cardsStore.metaCards.reduce((m, c) => c.specialCost != null ? Math.max(m, c.specialCost) : m, 0)
+)
+
+const advFiltersActive = computed(() =>
+  fColors.value.length > 0 || fType.value || fEdition.value ||
+  fClases.value.length || fRarity.value.length || fStarter.value || fSpecialSummon.value ||
+  fCostMin.value > 0 || fCostMax.value < maxCost.value ||
+  fLevelMin.value > 0 || fLevelMax.value < maxLevel.value ||
+  fStrengthMin.value > 0 || fStrengthMax.value < maxStrength.value ||
+  (maxSpecialCost.value > 0 && (fSpecialCostMin.value > 0 || fSpecialCostMax.value < maxSpecialCost.value))
+)
+
+const resetAdvFilters = () => {
+  fColors.value = []; fColorMatchMode.value = 'any'
+  fType.value = ''; fEdition.value = ''; fClases.value = []; fRarity.value = []
+  fCostMin.value = 0; fCostMax.value = 999
+  fLevelMin.value = 0; fLevelMax.value = 999
+  fStrengthMin.value = 0; fStrengthMax.value = 999
+  fSpecialCostMin.value = 0; fSpecialCostMax.value = 999
+  fSpecialSummon.value = ''; fStarter.value = false
+}
+
+const anyFilterActive = computed(() => !!(searchQuery.value || quickType.value || advFiltersActive.value))
+const clearAllFilters = () => { searchQuery.value = ''; quickType.value = ''; resetAdvFilters() }
+
+// Sync slider maxes to data range on initial load
+watch(maxCost,        val => { if (val > 0 && fCostMax.value        >= 999) fCostMax.value        = val }, { immediate: true })
+watch(maxLevel,       val => { if (val > 0 && fLevelMax.value       >= 999) fLevelMax.value       = val }, { immediate: true })
+watch(maxStrength,    val => { if (val > 0 && fStrengthMax.value    >= 999) fStrengthMax.value    = val }, { immediate: true })
+watch(maxSpecialCost, val => { if (val > 0 && fSpecialCostMax.value >= 999) fSpecialCostMax.value = val }, { immediate: true })
+
+// ── Collapse reprints ─────────────────────────────────────────────────────
+const collapseByName     = ref(true)
+const editionReleaseMap  = computed(() => editionsStore.releaseMap)
+
+const collapsedResults = computed(() => {
+  if (!collapseByName.value) return searchResults.value
+  const newest = new Map()
+  searchResults.value.forEach(card => {
+    const name = (card.name || '').toLowerCase()
+    if (!name) return
+    const existing = newest.get(name)
+    if (!existing) {
+      newest.set(name, card)
+    } else {
+      const fullEd = card.sub_edition     ? `${card.edition}.${card.sub_edition}`         : card.edition
+      const fullEx = existing.sub_edition ? `${existing.edition}.${existing.sub_edition}`  : existing.edition
+      const edDate = editionReleaseMap.value.get(fullEd) || ''
+      const exDate = editionReleaseMap.value.get(fullEx) || ''
+      if (edDate > exDate) newest.set(name, card)
+    }
+  })
+  const winnerIds = new Set([...newest.values()].map(c => c.id))
+  return searchResults.value.filter(c => {
+    const name = (c.name || '').toLowerCase()
+    if (!name) return true
+    return winnerIds.has(c.id)
+  })
 })
 
-const visibleCards = computed(() => {
-  return searchResults.value.slice(0, renderCount.value)
-})
+const visibleCards = computed(() => collapsedResults.value.slice(0, renderCount.value))
 
 // ── Selected card ─────────────────────────────────────────────────────────
 const selectedCard = ref(null)
@@ -169,15 +244,25 @@ const changeDeckPrivacy = () => {
 
 const countInDeck = cardId => deckCountMap.value[cardId] ?? 0
 
+// Count all copies of a card name across every version in the deck
+const deckNameCountMap = computed(() => {
+  const m = {}
+  deckEntries.value.forEach(e => {
+    const name = (e.card.name || '').toLowerCase()
+    if (name) m[name] = (m[name] ?? 0) + e.count
+  })
+  return m
+})
+const countNameInDeck = name => deckNameCountMap.value[(name || '').toLowerCase()] ?? 0
+
 const MAX_COPIES = 4
 const MAX_CARDS = 100
 
 const addToDeck = card => {
-  const existing = deckEntries.value.find(e => e.card.id === card.id)
-  
   if (totalCards.value >= MAX_CARDS) return
+  if (countNameInDeck(card.name) >= MAX_COPIES) return   // cross-version limit
+  const existing = deckEntries.value.find(e => e.card.id === card.id)
   if (existing) {
-    if (existing.count >= MAX_COPIES) return
     existing.count++
   } else {
     deckEntries.value.push({ card: { ...card }, count: 1 })
@@ -185,7 +270,6 @@ const addToDeck = card => {
   dirty.value = true
   selectedCard.value = card
   if (!deckImage.value) deckImage.value = cardImageUrl(card)
-  
 }
 
 const removeFromDeck = cardId => {
@@ -453,9 +537,16 @@ const resolveDeck = (data, copy) => {
   }
 }
 
+// ── Infinite scroll ───────────────────────────────────────────────────────────
+const loadMoreRef = ref(null)
+const observer    = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) renderCount.value += LOAD_MORE
+})
+
+onUnmounted(() => observer.disconnect())
+
 onMounted(async () => {
   loadingCards.value = true
-  window.addEventListener('scroll', onScroll)
 
   // Start deck fetch in parallel with card/edition loading
   const deckPromise = route.query.id
@@ -479,17 +570,9 @@ onMounted(async () => {
   if (deckRes) {
     resolveDeck(deckRes.data, route.query.copy)
   }
+
+  if (loadMoreRef.value) observer.observe(loadMoreRef.value)
 })
-
-
-const onScroll = () => {
-  const scrollBottom =
-    window.innerHeight + window.scrollY >= document.body.offsetHeight - 400
-
-  if (scrollBottom && renderCount.value < searchResults.value.length) {
-    renderCount.value += LOAD_MORE
-  }
-}
 
 watch(searchResults, () => {
   renderCount.value = 60
@@ -503,8 +586,61 @@ watch(deckEntries, () => {
   }
 })
 
+// ── Deck metrics ──────────────────────────────────────────────────────────
+const metricFilterType  = ref(null)
+const metricFilterColor = ref(null)
+
+const toggleMetricType  = t => { metricFilterType.value  = metricFilterType.value  === t ? null : t }
+const toggleMetricColor = c => { metricFilterColor.value = metricFilterColor.value === c ? null : c }
+
+const deckMetrics = computed(() => {
+  const types    = {}
+  const colors       = {}
+  const costs        = {}
+  const levels       = {}
+  const rarities     = {}
+  const specialCosts = {}
+
+  for (const { card, count } of deckEntries.value) {
+    const type   = card.meta?.cardType
+    const color  = card.color_identity
+    const cost   = card.meta?.cost
+    const level  = card.meta?.level   // only count if explicitly set (no ?? 0)
+    const rarity = card.meta?.rarity
+
+    // Type and color always show full deck totals (they are the filter selectors)
+    if (type)  types[type]   = (types[type]   ?? 0) + count
+    if (color) colors[color] = (colors[color] ?? 0) + count
+
+    // Other plots react to selected type/color filter
+    const passType  = !metricFilterType.value  || type  === metricFilterType.value
+    const passColor = !metricFilterColor.value || color === metricFilterColor.value
+    if (!passType || !passColor) continue
+
+    const specialCost = card.meta?.specialCost
+    if (cost        != null) costs[cost]              = (costs[cost]              ?? 0) + count
+    if (level       != null) levels[level]            = (levels[level]            ?? 0) + count
+    if (rarity)              rarities[rarity]         = (rarities[rarity]         ?? 0) + count
+    if (specialCost != null) specialCosts[specialCost] = (specialCosts[specialCost] ?? 0) + count
+  }
+
+  const costKeys    = Object.keys(costs).map(Number)
+  const levelKeys   = Object.keys(levels).map(Number).sort((a, b) => a - b)
+  const scKeys      = Object.keys(specialCosts).map(Number)
+
+  const maxCostKey     = costKeys.length ? Math.max(...costKeys) : 0
+  const maxScKey       = scKeys.length   ? Math.max(...scKeys)   : 0
+  const maxCostCount   = Math.max(0, ...Object.values(costs))
+  const maxLevelCount  = Math.max(0, ...Object.values(levels))
+  const maxRarityCount = Math.max(0, ...Object.values(rarities))
+  const maxScCount     = Math.max(0, ...Object.values(specialCosts))
+
+  return { types, colors, costs, levels, rarities, specialCosts, levelKeys, maxCostKey, maxScKey, maxCostCount, maxLevelCount, maxRarityCount, maxScCount }
+})
+
 // ── Tools dropdown ─────────────────────────────────────────────────────────
 const showToolsMenu = ref(false)
+const showDeckMetrics = ref(true)
 
 // ── Proxy print ────────────────────────────────────────────────────────────
 const proxyModal = ref(null)
@@ -543,7 +679,7 @@ const proxyModal = ref(null)
             <span class="db-copy-num">{{ countInDeck(selectedCard.id) }}</span>
             <span class="db-copy-label">en el mazo</span>
           </div>
-          <button class="db-copy-btn db-copy-btn--add" @click="addToDeck(selectedCard)" :disabled="countInDeck(selectedCard.id) >= MAX_COPIES || totalCards >= MAX_CARDS">
+          <button class="db-copy-btn db-copy-btn--add" @click="addToDeck(selectedCard)" :disabled="countNameInDeck(selectedCard.name) >= MAX_COPIES || totalCards >= MAX_CARDS">
             <i class="bi bi-plus"></i>
           </button>
         </div>
@@ -720,6 +856,130 @@ const proxyModal = ref(null)
           </div>
         </template>
       </div>
+
+      <!-- ── Deck metrics ──────────────────────────────────────────────────── -->
+      <div v-if="deckEntries.length > 0" class="db-metrics">
+
+        <!-- Header with toggle -->
+        <div class="dm-header">
+          <span class="dm-header-title">Métricas</span>
+          <span v-if="metricFilterType || metricFilterColor" class="dm-filter-hint">
+            {{ [metricFilterType && typeLabel(metricFilterType), metricFilterColor && colorLabel(metricFilterColor)].filter(Boolean).join(' · ') }}
+            <button class="dm-clear-filter" @click="metricFilterType = null; metricFilterColor = null">✕</button>
+          </span>
+          <button class="dm-toggle-btn" @click="showDeckMetrics = !showDeckMetrics">
+            <i :class="showDeckMetrics ? 'bi bi-chevron-down' : 'bi bi-chevron-up'"></i>
+          </button>
+        </div>
+
+        <template v-if="showDeckMetrics">
+          <!-- Selectors row: Type + Color (clickable, filter other plots) -->
+          <div class="dm-selectors">
+
+            <!-- Types -->
+            <div class="dm-section">
+              <div class="dm-title">Tipo <span class="dm-click-hint">clic para filtrar</span></div>
+              <div class="dm-hbars">
+                <template v-for="t in ['creature','structure','utility']" :key="t">
+                  <template v-if="deckMetrics.types[t]">
+                    <div class="dm-hbar-label" :class="{ 'dm-sel-active': metricFilterType === t, 'dm-sel-dim': metricFilterType && metricFilterType !== t }"
+                      @click="toggleMetricType(t)" style="cursor:pointer">{{ typeLabel(t) }}</div>
+                    <div class="dm-hbar-track dm-hbar-track--click" :class="{ 'dm-sel-dim': metricFilterType && metricFilterType !== t }"
+                      @click="toggleMetricType(t)">
+                      <div class="dm-hbar-fill" :class="['dm-type-' + t, { 'dm-sel-active-bar': metricFilterType === t }]"
+                        :style="{ width: (deckMetrics.types[t] / totalCards * 100) + '%' }"></div>
+                    </div>
+                    <div class="dm-hbar-val" :class="{ 'dm-sel-dim': metricFilterType && metricFilterType !== t }">{{ deckMetrics.types[t] }}</div>
+                  </template>
+                </template>
+              </div>
+            </div>
+
+            <!-- Colors -->
+            <div class="dm-section">
+              <div class="dm-title">Color <span class="dm-click-hint">clic para filtrar</span></div>
+              <div class="dm-hbars">
+                <template v-for="c in ['B','G','P','R','W']" :key="c">
+                  <template v-if="deckMetrics.colors[c]">
+                    <div class="dm-hbar-label" :class="{ 'dm-sel-active': metricFilterColor === c, 'dm-sel-dim': metricFilterColor && metricFilterColor !== c }"
+                      @click="toggleMetricColor(c)" style="cursor:pointer">{{ colorLabel(c) }}</div>
+                    <div class="dm-hbar-track dm-hbar-track--click" :class="{ 'dm-sel-dim': metricFilterColor && metricFilterColor !== c }"
+                      @click="toggleMetricColor(c)">
+                      <div class="dm-hbar-fill" :class="['dm-color-' + c.toLowerCase(), { 'dm-sel-active-bar': metricFilterColor === c }]"
+                        :style="{ width: (deckMetrics.colors[c] / totalCards * 100) + '%' }"></div>
+                    </div>
+                    <div class="dm-hbar-val" :class="{ 'dm-sel-dim': metricFilterColor && metricFilterColor !== c }">{{ deckMetrics.colors[c] }}</div>
+                  </template>
+                </template>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 2×2 bar plots (react to type/color filter) -->
+          <div class="dm-plots dm-plots--2x2">
+
+            <!-- Cost -->
+            <div class="dm-plot">
+              <div class="dm-plot-title">Coste</div>
+              <div class="dm-vbars">
+                <div v-for="i in (deckMetrics.maxCostKey + 1)" :key="i - 1" class="dm-vbar-col">
+                  <div class="dm-vbar-count">{{ deckMetrics.costs[i - 1] || '' }}</div>
+                  <div class="dm-vbar-track">
+                    <div class="dm-vbar-fill" :style="{ height: deckMetrics.costs[i - 1] ? (deckMetrics.costs[i - 1] / deckMetrics.maxCostCount * 100) + '%' : '0%' }"></div>
+                  </div>
+                  <div class="dm-vbar-axis"><span class="dm-axis-tick"></span><span class="dm-axis-val">{{ i - 1 }}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Level -->
+            <div class="dm-plot">
+              <div class="dm-plot-title">Nivel</div>
+              <div class="dm-vbars">
+                <div v-for="lvl in deckMetrics.levelKeys" :key="lvl" class="dm-vbar-col">
+                  <div class="dm-vbar-count">{{ deckMetrics.levels[lvl] || '' }}</div>
+                  <div class="dm-vbar-track">
+                    <div class="dm-vbar-fill" :style="{ height: deckMetrics.levels[lvl] ? (deckMetrics.levels[lvl] / deckMetrics.maxLevelCount * 100) + '%' : '0%' }"></div>
+                  </div>
+                  <div class="dm-vbar-axis"><span class="dm-axis-tick"></span><span class="dm-axis-val">{{ lvl }}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Rarity -->
+            <div class="dm-plot">
+              <div class="dm-plot-title">Rareza</div>
+              <div class="dm-vbars">
+                <div v-for="r in ['C','UC','R','SR','SEC']" :key="r" class="dm-vbar-col">
+                  <div class="dm-vbar-count">{{ deckMetrics.rarities[r] || '' }}</div>
+                  <div class="dm-vbar-track">
+                    <div class="dm-vbar-fill" :class="'dm-rarity-' + r"
+                      :style="{ height: deckMetrics.rarities[r] ? (deckMetrics.rarities[r] / deckMetrics.maxRarityCount * 100) + '%' : '0%' }"></div>
+                  </div>
+                  <div class="dm-vbar-axis"><span class="dm-axis-tick"></span><span class="dm-axis-val">{{ r }}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Special Cost -->
+            <div v-if="deckMetrics.maxScCount > 0" class="dm-plot">
+              <div class="dm-plot-title">Coste especial</div>
+              <div class="dm-vbars">
+                <div v-for="i in (deckMetrics.maxScKey + 1)" :key="i - 1" class="dm-vbar-col">
+                  <div class="dm-vbar-count">{{ deckMetrics.specialCosts[i - 1] || '' }}</div>
+                  <div class="dm-vbar-track">
+                    <div class="dm-vbar-fill"
+                      :style="{ height: deckMetrics.specialCosts[i - 1] ? (deckMetrics.specialCosts[i - 1] / deckMetrics.maxScCount * 100) + '%' : '0%' }"></div>
+                  </div>
+                  <div class="dm-vbar-axis"><span class="dm-axis-tick"></span><span class="dm-axis-val">{{ i - 1 }}</span></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- ══ RIGHT: Search ══════════════════════════════════════════════════════ -->
@@ -741,14 +1001,23 @@ const proxyModal = ref(null)
           </div>
         </div>
 
-        <!-- Quick type chips -->
+        <!-- Quick type chips + collapse toggle -->
         <div v-if="showQuickFilters" class="db-quick-chips">
-          <button v-for="t in CARD_TYPES" :key="t" class="chip"
+          <button v-for="t in availableTypes" :key="t" class="chip"
             :class="{ active: quickType === t }"
-            @click="quickType = quickType === t ? '' : t">{{ t }}</button>
+            @click="quickType = quickType === t ? '' : t">{{ typeLabel(t) }}</button>
+          <button class="chip" :class="{ active: !collapseByName }"
+            @click="collapseByName = !collapseByName">
+            {{ collapseByName ? 'Prints antiguos' : 'Solo prints recientes' }}
+          </button>
         </div>
 
-        <div class="db-results-count">{{ searchResults.length }} carta{{ searchResults.length !== 1 ? 's' : '' }}</div>
+        <div class="db-results-row">
+          <div class="db-results-count">{{ collapsedResults.length }} carta{{ collapsedResults.length !== 1 ? 's' : '' }}</div>
+          <button v-if="anyFilterActive" class="db-clear-btn" @click="clearAllFilters">
+            <i class="bi bi-x-circle"></i> Limpiar filtros
+          </button>
+        </div>
       </div>
 
       <div v-if="loadingCards" class="db-loading">Cargando…</div>
@@ -756,15 +1025,16 @@ const proxyModal = ref(null)
         <div class="db-search-grid">
           <div v-for="card in visibleCards" :key="card.id"
             class="db-search-card"
-            :class="{ 'db-search-card--selected': selectedCard?.id === card.id, 'db-search-card--maxed': countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS }"
+            :class="{ 'db-search-card--selected': selectedCard?.id === card.id, 'db-search-card--maxed': countNameInDeck(card.name) >= MAX_COPIES || totalCards >= MAX_CARDS }"
             draggable="true"
             @dragstart="onSearchDragStart(card, $event)"
             @click="selectCard(card)"
             @contextmenu.prevent="addToDeck(card)">
             <img :src="cardImageUrl(card)" :alt="card.name" class="db-search-img" />
-            <span v-if="countInDeck(card.id) > 0" class="db-count-badge" :class="{ 'db-count-badge--max': countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS }">{{ countInDeck(card.id) }}</span>
-            <button class="db-search-add" @click.stop="addToDeck(card)" :disabled="countInDeck(card.id) >= MAX_COPIES || totalCards >= MAX_CARDS" title="Añadir">+</button>
+            <span v-if="countNameInDeck(card.name) > 0" class="db-count-badge" :class="{ 'db-count-badge--max': countNameInDeck(card.name) >= MAX_COPIES || totalCards >= MAX_CARDS }">{{ countNameInDeck(card.name) }}</span>
+            <button class="db-search-add" @click.stop="addToDeck(card)" :disabled="countNameInDeck(card.name) >= MAX_COPIES || totalCards >= MAX_CARDS" title="Añadir">+</button>
           </div>
+          <div ref="loadMoreRef" class="db-load-trigger"></div>
         </div>
       </div>
     </div>
@@ -788,10 +1058,14 @@ const proxyModal = ref(null)
           <div class="filter-group">
             <label class="filter-label">Color</label>
             <div class="filter-chips filter-chips--colors">
-              <button v-for="c in COLOR_IDENTITIES" :key="c"
+              <button v-for="c in availableColorIdentities" :key="c"
                 class="chip chip--color"
-                :class="['color-' + c.toLowerCase(), { active: fColors.includes(c) }]"
-                @click="() => { if (fColors.length === COLOR_IDENTITIES.length) { fColors = [c] } else if (fColors.includes(c)) { const next = fColors.filter(x => x !== c); fColors = next.length ? next : [...COLOR_IDENTITIES] } else { fColors = [...fColors, c] } }">
+                :class="['color-' + c.toLowerCase(), { active: fColors.length === 0 || fColors.includes(c) }]"
+                @click="() => {
+                  if (fColors.length === 0) { fColors = [c] }
+                  else if (fColors.includes(c)) { const next = fColors.filter(x => x !== c); fColors = next }
+                  else { const next = [...fColors, c]; fColors = next.length >= availableColorIdentities.length ? [] : next }
+                }">
                 {{ colorLabel(c) }}
               </button>
             </div>
@@ -813,7 +1087,7 @@ const proxyModal = ref(null)
             <label class="filter-label">Tipo</label>
             <select v-model="fType" class="filter-select">
               <option value="">Todos</option>
-              <option v-for="t in availableTypes" :key="t" :value="t">{{ t }}</option>
+              <option v-for="t in availableTypes" :key="t" :value="t">{{ typeLabel(t) }}</option>
             </select>
           </div>
 
@@ -830,22 +1104,42 @@ const proxyModal = ref(null)
           </div>
 
           <!-- Cost -->
-          <div class="filter-group">
-            <label class="filter-label">Coste<span class="filter-range-val" v-if="fCostMin > 0 || fCostMax < COST_MAX"> ({{ fCostMin }}–{{ fCostMax }})</span></label>
-            <div class="dual-range" :style="{ '--pct-min': (fCostMin / COST_MAX * 100) + '%', '--pct-max': (fCostMax / COST_MAX * 100) + '%' }">
+          <div v-if="maxCost > 0" class="filter-group">
+            <label class="filter-label">Coste<span class="filter-range-val" v-if="fCostMin > 0 || fCostMax < maxCost"> ({{ fCostMin }}–{{ fCostMax }})</span></label>
+            <div class="dual-range" :style="{ '--pct-min': (fCostMin / maxCost * 100) + '%', '--pct-max': (Math.min(fCostMax, maxCost) / maxCost * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" :max="COST_MAX" step="1" v-model.number="fCostMin" @input="fCostMax = fCostMin > fCostMax ? fCostMin : fCostMax" />
-              <input type="range" min="0" :max="COST_MAX" step="1" v-model.number="fCostMax" @input="fCostMin = fCostMax < fCostMin ? fCostMax : fCostMin" />
+              <input type="range" min="0" :max="maxCost" step="1" v-model.number="fCostMin" @input="fCostMax = fCostMin > fCostMax ? fCostMin : fCostMax" />
+              <input type="range" min="0" :max="maxCost" step="1" v-model.number="fCostMax" @input="fCostMin = fCostMax < fCostMin ? fCostMax : fCostMin" />
             </div>
           </div>
 
           <!-- Level -->
-          <div class="filter-group">
-            <label class="filter-label">Nivel<span class="filter-range-val" v-if="fLevelMin > 0 || fLevelMax < LEVEL_MAX"> ({{ fLevelMin }}–{{ fLevelMax }})</span></label>
-            <div class="dual-range" :style="{ '--pct-min': (fLevelMin / LEVEL_MAX * 100) + '%', '--pct-max': (fLevelMax / LEVEL_MAX * 100) + '%' }">
+          <div v-if="maxLevel > 0" class="filter-group">
+            <label class="filter-label">Nivel<span class="filter-range-val" v-if="fLevelMin > 0 || fLevelMax < maxLevel"> ({{ fLevelMin }}–{{ fLevelMax }})</span></label>
+            <div class="dual-range" :style="{ '--pct-min': (fLevelMin / maxLevel * 100) + '%', '--pct-max': (Math.min(fLevelMax, maxLevel) / maxLevel * 100) + '%' }">
               <div class="dual-range-track"></div>
-              <input type="range" min="0" :max="LEVEL_MAX" step="1" v-model.number="fLevelMin" @input="fLevelMax = fLevelMin > fLevelMax ? fLevelMin : fLevelMax" />
-              <input type="range" min="0" :max="LEVEL_MAX" step="1" v-model.number="fLevelMax" @input="fLevelMin = fLevelMax < fLevelMin ? fLevelMax : fLevelMin" />
+              <input type="range" min="0" :max="maxLevel" step="1" v-model.number="fLevelMin" @input="fLevelMax = fLevelMin > fLevelMax ? fLevelMin : fLevelMax" />
+              <input type="range" min="0" :max="maxLevel" step="1" v-model.number="fLevelMax" @input="fLevelMin = fLevelMax < fLevelMin ? fLevelMax : fLevelMin" />
+            </div>
+          </div>
+
+          <!-- Strength -->
+          <div v-if="maxStrength > 0" class="filter-group">
+            <label class="filter-label">Fuerza<span class="filter-range-val" v-if="fStrengthMin > 0 || fStrengthMax < maxStrength"> ({{ fStrengthMin }}–{{ fStrengthMax }})</span></label>
+            <div class="dual-range" :style="{ '--pct-min': (fStrengthMin / maxStrength * 100) + '%', '--pct-max': (Math.min(fStrengthMax, maxStrength) / maxStrength * 100) + '%' }">
+              <div class="dual-range-track"></div>
+              <input type="range" min="0" :max="maxStrength" step="1" v-model.number="fStrengthMin" @input="fStrengthMax = fStrengthMin > fStrengthMax ? fStrengthMin : fStrengthMax" />
+              <input type="range" min="0" :max="maxStrength" step="1" v-model.number="fStrengthMax" @input="fStrengthMin = fStrengthMax < fStrengthMin ? fStrengthMax : fStrengthMin" />
+            </div>
+          </div>
+
+          <!-- Special cost -->
+          <div v-if="maxSpecialCost > 0" class="filter-group">
+            <label class="filter-label">Coste Especial<span class="filter-range-val" v-if="fSpecialCostMin > 0 || fSpecialCostMax < maxSpecialCost"> ({{ fSpecialCostMin }}–{{ fSpecialCostMax }})</span></label>
+            <div class="dual-range" :style="{ '--pct-min': (fSpecialCostMin / maxSpecialCost * 100) + '%', '--pct-max': (Math.min(fSpecialCostMax, maxSpecialCost) / maxSpecialCost * 100) + '%' }">
+              <div class="dual-range-track"></div>
+              <input type="range" min="0" :max="maxSpecialCost" step="1" v-model.number="fSpecialCostMin" @input="fSpecialCostMax = fSpecialCostMin > fSpecialCostMax ? fSpecialCostMin : fSpecialCostMax" />
+              <input type="range" min="0" :max="maxSpecialCost" step="1" v-model.number="fSpecialCostMax" @input="fSpecialCostMin = fSpecialCostMax < fSpecialCostMin ? fSpecialCostMax : fSpecialCostMin" />
             </div>
           </div>
 
@@ -854,7 +1148,7 @@ const proxyModal = ref(null)
             <label class="filter-label">Inv. Especial</label>
             <select v-model="fSpecialSummon" class="filter-select">
               <option value="">Todos</option>
-              <option v-for="ss in availableSpecialSummons" :key="ss" :value="ss">{{ ss }}</option>
+              <option v-for="ss in availableSpecialSummons" :key="ss" :value="ss">{{ ssLabel(ss) }}</option>
             </select>
           </div>
 
@@ -862,12 +1156,18 @@ const proxyModal = ref(null)
           <div class="filter-group">
             <label class="filter-label">Rareza</label>
             <div class="filter-chips">
-              <button v-for="r in RARITIES" :key="r" class="chip"
+              <button v-for="r in availableRarities" :key="r" class="chip"
                 :class="{ active: fRarity.includes(r) }"
                 @click="fRarity = fRarity.includes(r) ? fRarity.filter(x => x !== r) : [...fRarity, r]">
                 {{ r }}
               </button>
             </div>
+          </div>
+
+          <!-- Reprints -->
+          <div class="filter-group filter-group--row">
+            <input type="checkbox" :checked="!collapseByName" @change="collapseByName = !$event.target.checked" class="filter-check" id="db-reprints" />
+            <label class="filter-label" for="db-reprints">Mostrar reprints</label>
           </div>
 
           <!-- Starter -->
@@ -1163,7 +1463,10 @@ const proxyModal = ref(null)
 }
 
 .db-quick-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.db-results-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .db-results-count { font-size: 0.68rem; color: var(--text-muted); }
+.db-clear-btn { font-size: 0.68rem; background: none; border: none; color: #f87171; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; padding: 0; }
+.db-clear-btn:hover { color: #ef4444; }
 
 .db-loading { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.85rem; }
 
@@ -1172,6 +1475,7 @@ const proxyModal = ref(null)
 .db-search-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.4rem;
 }
+.db-load-trigger { height: 1px; }
 
 .db-search-card {
   position: relative; cursor: pointer; border-radius: 5px; overflow: hidden;
@@ -1326,4 +1630,77 @@ const proxyModal = ref(null)
 .db-tools-item:hover:not(:disabled) { background: var(--card-border); }
 .db-tools-item:disabled { opacity: 0.4; cursor: default; }
 
+/* ── Deck metrics ────────────────────────────────────────────────────────── */
+.db-metrics {
+  flex-shrink: 0;
+  border-top: 1px solid var(--card-border);
+  padding: 0.5rem 0.6rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--card-bg);
+}
+
+/* Header */
+.dm-header { display: flex; align-items: center; gap: 0.5rem; }
+.dm-header-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); flex: 1; }
+.dm-filter-hint { font-size: 0.62rem; color: #818cf8; display: flex; align-items: center; gap: 0.3rem; }
+.dm-clear-filter { background: none; border: none; color: #818cf8; cursor: pointer; font-size: 0.7rem; padding: 0; line-height: 1; }
+.dm-toggle-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.1rem 0.3rem; font-size: 0.75rem; }
+.dm-toggle-btn:hover { color: var(--text-primary); }
+
+/* Selectors (type + color) */
+.dm-selectors { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.75rem; }
+.dm-section { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.dm-title { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.dm-click-hint { font-size: 0.55rem; font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.6; }
+
+/* Horizontal bars */
+.dm-hbars { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.12rem 0.35rem; }
+.dm-hbar-label { font-size: 0.62rem; color: var(--text-muted); white-space: nowrap; transition: opacity 0.2s; }
+.dm-hbar-track { height: 7px; background: var(--card-border); border-radius: 4px; overflow: hidden; transition: opacity 0.2s; }
+.dm-hbar-track--click { cursor: pointer; }
+.dm-hbar-track--click:hover { filter: brightness(1.15); }
+.dm-hbar-fill  { height: 100%; border-radius: 4px; transition: width 0.3s, opacity 0.2s; }
+.dm-hbar-val   { font-size: 0.62rem; color: var(--text-muted); text-align: right; transition: opacity 0.2s; }
+
+/* Filter selection states */
+.dm-sel-dim { opacity: 0.3; }
+.dm-sel-active { color: var(--text-primary) !important; font-weight: 600; opacity: 1 !important; }
+.dm-sel-active-bar { filter: brightness(1.2); box-shadow: 0 0 0 1px rgba(255,255,255,0.3); }
+
+/* Type / color fills */
+.dm-type-creature  { background: #60a5fa; }
+.dm-type-structure { background: #f59e0b; }
+.dm-type-utility   { background: #34d399; }
+.dm-color-b { background: #60a5fa; }
+.dm-color-g { background: #34d399; }
+.dm-color-p { background: #a78bfa; }
+.dm-color-r { background: #f87171; }
+.dm-color-w { background: #d1d5db; }
+
+/* 2×2 plot grid */
+.dm-plots { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.75rem; }
+.dm-plots--2x2 { grid-template-columns: 1fr 1fr; }
+.dm-plot { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.dm-plot-title { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+
+/* Vertical bars */
+.dm-vbars { display: flex; align-items: flex-end; gap: 2px; height: 55px; }
+.dm-vbar-col { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; height: 100%; }
+.dm-vbar-count { font-size: 0.5rem; color: var(--text-primary); font-weight: 600; line-height: 1; min-height: 0.65rem; }
+.dm-vbar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.dm-vbar-fill  { width: 100%; background: #818cf8; border-radius: 2px 2px 0 0; transition: height 0.3s; }
+
+/* X-axis: tick line + label clearly separated from bar */
+.dm-vbar-axis { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.dm-axis-tick { display: block; width: 100%; height: 1px; background: var(--card-border); margin-bottom: 2px; }
+.dm-axis-val  { font-size: 0.5rem; color: var(--text-muted); line-height: 1; }
+
+/* Rarity colors */
+.dm-rarity-C   { background: #9ca3af; }
+.dm-rarity-UC  { background: #34d399; }
+.dm-rarity-R   { background: #60a5fa; }
+.dm-rarity-SR  { background: #f59e0b; }
+.dm-rarity-SEC { background: #f472b6; }
 </style>
