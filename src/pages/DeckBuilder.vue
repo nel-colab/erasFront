@@ -661,7 +661,7 @@ const proxyModal = ref(null)
         <div class="db-detail-header">
           <h2 class="db-card-name">{{ selectedCard.name }}</h2>
           <div class="db-detail-badges">
-            <span class="db-badge db-badge--ed">{{ selectedCard.edition }}</span>
+            <span class="db-badge db-badge--ed">{{ selectedCard.sub_edition ? `${selectedCard.edition}.${selectedCard.sub_edition}` : selectedCard.edition }}</span>
             <span class="db-badge db-badge--num">#{{ selectedCard.number }}</span>
             <span class="db-badge" :class="'db-badge--' + (selectedCard.color_identity || '').toLowerCase()">
               {{ colorLabel(selectedCard.color_identity) }}
