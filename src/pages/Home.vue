@@ -96,7 +96,7 @@ const saveHome = async () => {
 }
 
 const deckLink = deck =>
-  deck.raw ? `/deck-builder?id=${deck.raw.id}&copy=true` : '#'
+  deck.raw ? `/deck/${deck.raw.id}` : '#'
 
 
 </script>

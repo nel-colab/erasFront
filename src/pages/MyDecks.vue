@@ -113,7 +113,7 @@ const visibleDecks = computed(() => {
     </div>
 
     <div v-else class="md-grid">
-      <div v-for="deck in decks" :key="deck.id" class="md-card">
+      <div v-for="deck in visibleDecks" :key="deck.id" class="md-card">
         <!-- Cover image -->
         <div class="md-cover">
           <img v-if="deckCoverUrl(deck)" :src="deckCoverUrl(deck)" :alt="deck.deckName" class="md-cover-img" />
