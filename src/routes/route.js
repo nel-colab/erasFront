@@ -20,6 +20,8 @@ import Ruling from '../pages/Ruling.vue'
 import NotFound from '../pages/NotFound.vue'
 import DeckView      from '../pages/DeckView.vue'
 import BoosterResult from '../pages/BoosterResult.vue'
+import Tierlist      from '../pages/Tierlist.vue'
+import GamesManager  from '../pages/GamesManager.vue'
 
 
 const routes = [
@@ -41,6 +43,8 @@ const routes = [
   { path: '/permissions', component: PermissionsManager },
   { path: '/users-manager', component: UsersManager },
   { path: '/ruling', component: Ruling },
+  { path: '/tierlist', component: Tierlist },
+  { path: '/games-manager', component: GamesManager },
   { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
 ]
 

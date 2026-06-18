@@ -286,6 +286,16 @@ const deckLink = deck =>
   align-items:stretch;
 }
 
+@media (max-width:900px){
+  .home-hero{
+    grid-template-columns:1fr;
+  }
+  .hero-set-card{
+    aspect-ratio:16/7;
+    max-height:280px;
+  }
+}
+
 /* ─── Latest Set Card ───────────────────────── */
 
 .hero-set-card{
@@ -384,7 +394,7 @@ const deckLink = deck =>
 /* deck card */
 .hero-deck{
   display:grid;
-  grid-template-columns: 1fr 140px;
+  grid-template-columns: 1fr minmax(80px, 140px);
 
   background:var(--card-bg);
   border:1px solid var(--card-border);
@@ -506,6 +516,14 @@ const deckLink = deck =>
   gap:1rem;
 }
 
+@media (max-width:768px){
+  .news-grid{ grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width:480px){
+  .news-grid{ grid-template-columns:1fr; }
+  .page-container{ padding:0 0.75rem; }
+}
+
 .news-card{
   display:flex;
   flex-direction:column;
@@ -574,7 +592,8 @@ const deckLink = deck =>
   border-radius:8px;
 
   padding:1.5rem;
-  width:540px;
+  width:100%;
+  max-width:540px;
   max-height:70vh;
 
   display:flex;

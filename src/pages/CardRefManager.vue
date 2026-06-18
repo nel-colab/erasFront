@@ -909,8 +909,11 @@ watch([checkModal, showEffectModal], ([checkOpen, effectOpen]) => {
 }
 
 
+@media (max-width: 1400px) {
+  .ref-columns { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 1100px) {
-  .ref-columns { grid-template-columns: 1.5fr 1fr; }
+  .ref-columns { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 580px) {
   .ref-columns { grid-template-columns: 1fr; }

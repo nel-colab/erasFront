@@ -374,7 +374,7 @@ onMounted(fetch)
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .mgr-table {
