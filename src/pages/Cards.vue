@@ -2033,8 +2033,8 @@ watch([showDetail, showCardForm, showEffectModal, showMetaList, showAssignPicker
 }
 .btn-sort-dir:hover { border-color: #3f51b5; color: #7986cb; }
 .filter-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
-.filter-chips--colors { flex-wrap: nowrap; }
-.chip--color { padding: 0.2rem 0.45rem; font-size: 0.72rem; flex: 1; text-align: center; }
+.filter-chips--colors { flex-wrap: wrap; }
+.chip--color { padding: 0.2rem 0.45rem; font-size: 0.72rem; flex: 1; min-width: 50px; text-align: center; }
 
 /* Color mode toggle (below color chips in filter) */
 .filter-mode-toggle { display: flex; gap: 0.25rem; margin-top: 0.35rem; }

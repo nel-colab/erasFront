@@ -1193,6 +1193,25 @@ const proxyModal = ref(null)
   overflow: hidden;
 }
 
+@media (max-width: 1100px) {
+  .db-page {
+    grid-template-columns: 1fr 1fr;
+  }
+  .db-left { display: none; }
+}
+
+@media (max-width: 650px) {
+  .db-page {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+    padding: 0 0.25rem 1rem;
+  }
+  .db-left { display: none; }
+  .db-mid  { height: 62vh; min-height: 400px; }
+  .db-right { height: 78vh; min-height: 450px; }
+}
+
 /* ── Shared panel ────────────────────────────────────────────────────────── */
 .db-left, .db-mid, .db-right {
   display: flex;
@@ -1565,7 +1584,7 @@ const proxyModal = ref(null)
 .filter-select option { background: var(--input-bg); }
 .filter-check { width: 14px; height: 14px; cursor: pointer; accent-color: #3f51b5; }
 .filter-chips { display: flex; gap: 0.25rem; flex-wrap: wrap; }
-.filter-chips--colors { flex-wrap: nowrap; }
+.filter-chips--colors { flex-wrap: wrap; }
 
 /* Dual range */
 .dual-range { position: relative; height: 20px; width: 100%; }

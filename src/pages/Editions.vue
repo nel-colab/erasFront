@@ -671,4 +671,10 @@ const simPackType = computed(() =>
   .form-grid { grid-template-columns: 1fr; }
   .sim-actions { flex-direction: column; }
 }
+@media (max-width: 480px) {
+  .ed-header { flex-wrap: wrap; gap: 0.75rem; }
+  .edition-row { flex-wrap: wrap; gap: 0.6rem; }
+  .row-image { width: 70px; }
+  .row-actions { width: 100%; justify-content: flex-end; }
+}
 </style>

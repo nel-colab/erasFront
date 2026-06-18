@@ -93,6 +93,9 @@ const refreshCards = async () => {
           <li class="nav-item active">
             <router-link class="nav-link" to="/public-decks">Mazos</router-link>
           </li>
+          <li v-if="isAuth" class="nav-item active">
+            <router-link class="nav-link" to="/tierlist">Tierlist</router-link>
+          </li>
 
           <!-- ✅ FAQ link -->
           <li v-if="isAdmin" class="nav-item active">
@@ -138,6 +141,9 @@ const refreshCards = async () => {
                   </li>
                   <li>
                     <router-link class="dropdown-item" to="/my-decks">Mis mazos</router-link>
+                  </li>
+                  <li>
+                    <router-link v-if="auth.can('manage_decks')" class="dropdown-item" to="/games-manager">Registro de partidas</router-link>
                   </li>
                   <li>
                     <router-link v-if="auth.can('manage_cards')" class="dropdown-item" to="/updates-manager">Gestionar cambios</router-link>
@@ -212,6 +218,7 @@ const refreshCards = async () => {
             </div>
             <router-link to="/profile" class="btn btn-outline-light w-100 fw-bold mb-2">Go to Profile</router-link>
             <router-link to="/my-decks" class="btn btn-secondary w-100 fw-bold mb-2">Mis mazos</router-link>
+            <router-link to="/tierlist" class="btn btn-secondary w-100 fw-bold mb-2">Tierlist</router-link>
             <router-link to="/updates-manager" class="btn btn-secondary w-100 fw-bold mb-2">Manage Updates</router-link>
             <router-link to="/card-ref" class="btn btn-secondary w-100 fw-bold mb-2">Card Reference Data</router-link>
             <router-link to="/users-manager" class="btn btn-secondary w-100 fw-bold mb-2">Gestionar usuarios</router-link>
@@ -242,8 +249,8 @@ const refreshCards = async () => {
 }
 
 .navbar-nav { text-align: center; }
-.navbar-nav .nav-item { margin-left: 1rem; }
-.navbar-nav .nav-link { font-size: 1.05rem; }
+.navbar-nav .nav-item { margin-left: 0.25rem; }
+.navbar-nav .nav-link { font-size: 0.76rem; padding-left: 0.45rem; padding-right: 0.45rem; }
 .navbar-collapse { justify-content: center; }
 
 .logo-img { height: 60px; object-fit: contain; }

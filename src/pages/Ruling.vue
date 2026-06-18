@@ -704,6 +704,16 @@ function limitarContador(valor){
   padding:20px 40px;
 }
 
+@media (max-width: 600px) {
+  .manual-page { padding: 16px 12px; }
+  .breadcrumb { flex-wrap: wrap; overflow: visible; border-radius: 6px; }
+  .breadcrumb a { flex: 1 1 auto; text-align: center; padding: 7px 10px; font-size: 12px; border-right: none; border-bottom: 1px solid #bbb; }
+  .breadcrumb a:last-child { border-bottom: none; }
+  .control { overflow-x: auto; }
+  .barra-gemas { grid-template-columns: repeat(21, minmax(26px, 1fr)); gap: 3px; }
+  .gema-slot { min-width: 26px; min-height: 26px; font-size: 11px; }
+}
+
 /* TITULO */
 
 .titulo-manual{
