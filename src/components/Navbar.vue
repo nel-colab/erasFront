@@ -96,6 +96,9 @@ const refreshCards = async () => {
           <li v-if="isAuth" class="nav-item active">
             <router-link class="nav-link" to="/tierlist">Tierlist</router-link>
           </li>
+          <li v-if="isAuth" class="nav-item active">
+            <router-link class="nav-link" to="/simulator">Simulador</router-link>
+          </li>
 
           <!-- ✅ FAQ link -->
           <li v-if="isAdmin" class="nav-item active">

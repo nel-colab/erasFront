@@ -14,10 +14,12 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: {
-         '@': '/src',
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
     server: {
+      port: parseInt(env.VITE_DEV_PORT) || 5173,
+      host: true,
       proxy: {
         '/api/drive': {
           target: env.VITE_DRIVE_API_BASE_URL || 'http://localhost:8081',
@@ -27,10 +29,19 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_DRIVE_API_BASE_URL || 'http://localhost:8081',
           changeOrigin: true,
         },
+        '/api/simulator': {
+          target: env.VITE_DRIVE_API_BASE_URL || 'http://localhost:8081',
+          changeOrigin: true,
+        },
         '/api': {
           target: env.VITE_API_BASE_URL || 'http://localhost:8080',
           changeOrigin: true,
-        }
+        },
+        '/ws': {
+          target: env.VITE_DRIVE_API_BASE_URL || 'http://localhost:8081',
+          ws: true,
+          changeOrigin: true,
+        },
       }
     }
   }

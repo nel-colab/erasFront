@@ -1,7 +1,11 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import Navbar from './components/Navbar.vue'
 import { useThemeStore } from './store/theme'
+
+const route = useRoute()
+const isGameBoard = computed(() => route.path.endsWith('/board'))
 
 const showWelcomeModal = ref(false)
 
@@ -24,13 +28,13 @@ const closeWelcomeModal = () => {
 </script>
 
 <template>
-  <nav>
+  <nav v-if="!isGameBoard">
     <Navbar />
   </nav>
 
-  <main class="container-fluid mt-5 pt-4">
-    <div style="max-width:1800px;margin:auto;">
-      <div class="col">
+  <main :class="isGameBoard ? 'board-main' : 'container-fluid mt-5 pt-4'">
+    <div :style="isGameBoard ? '' : 'max-width:1800px;margin:auto;'">
+      <div :class="isGameBoard ? '' : 'col'">
         <router-view />
       </div>
     </div>
@@ -69,6 +73,7 @@ const closeWelcomeModal = () => {
 </template>
 
 <style>
+.board-main { padding: 0; margin: 0; }
 .modal-overlay{
   position: fixed;
   inset: 0;
