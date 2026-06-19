@@ -22,6 +22,8 @@ import DeckView      from '../pages/DeckView.vue'
 import BoosterResult from '../pages/BoosterResult.vue'
 import Tierlist      from '../pages/Tierlist.vue'
 import GamesManager  from '../pages/GamesManager.vue'
+import Simulator     from '../pages/Simulator.vue'
+import GameBoard     from '../pages/GameBoard.vue'
 
 
 const routes = [
@@ -45,6 +47,9 @@ const routes = [
   { path: '/ruling', component: Ruling },
   { path: '/tierlist', component: Tierlist },
   { path: '/games-manager', component: GamesManager },
+  { path: '/simulator',            component: Simulator },
+  { path: '/simulator/:roomId',    component: Simulator },
+  { path: '/simulator/:roomId/board', component: GameBoard },
   { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
 ]
 
