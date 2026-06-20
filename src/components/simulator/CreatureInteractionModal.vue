@@ -19,14 +19,10 @@ function hasSummonedAttachments() {
 
 // Map specialSummonKind (DB value) to action key + display label
 const SUMMON_MAP = {
-  'materialización': { key: 'materialization', label: 'Materialización' },
-  'materializacion':  { key: 'materialization', label: 'Materialización' },
   'materialization':  { key: 'materialization', label: 'Materialización' },
-  'evolución':        { key: 'evolution',        label: 'Evolución'       },
-  'evolucion':        { key: 'evolution',        label: 'Evolución'       },
   'evolution':        { key: 'evolution',        label: 'Evolución'       },
   'ritual':           { key: 'ritual',           label: 'Ritual'          },
-  'ascenso':          { key: 'ascenso',          label: 'Ascenso'         },
+  'promotion':          { key: 'promotion',          label: 'Ascenso'         },
 }
 
 const validSummon = computed(() => {

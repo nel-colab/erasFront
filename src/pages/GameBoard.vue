@@ -204,6 +204,17 @@ function goNewGame() {
     <!-- Targeting SVG overlay -->
     <TargetingOverlay />
 
+    <!-- Card reveal popup (both players see this for 3s) -->
+    <div v-if="game.revealedCards.length" class="reveal-container">
+      <TransitionGroup name="reveal-pop" tag="div" class="reveal-inner">
+        <div v-for="card in game.revealedCards" :key="card.id" class="reveal-popup">
+          <div class="reveal-label">Carta añadida</div>
+          <img :src="card.imageUrl" class="reveal-img" alt="" />
+          <div v-if="card.name" class="reveal-name">{{ card.name }}</div>
+        </div>
+      </TransitionGroup>
+    </div>
+
     <!-- Starter selection overlay -->
     <StarterSelectModal v-if="isSelectingStarter" />
 
@@ -334,10 +345,10 @@ function goNewGame() {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  flex-shrink: 0;
+  flex: 0 0 236px;
 }
 
-.ctrl-right { position: relative; }
+.ctrl-right { position: relative; justify-content: flex-end; }
 
 .turn-badge {
   font-size: 0.65rem;
@@ -541,6 +552,60 @@ function goNewGame() {
   color: #a5b4fc;
 }
 .end-btn.primary:hover { background: rgba(99,102,241,0.5); color: #fff; }
+
+/* ── Card reveal popup ────────────────────── */
+.reveal-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2000;
+  pointer-events: none;
+}
+.reveal-inner {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.reveal-popup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+.reveal-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  background: rgba(0,0,0,0.7);
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+}
+.reveal-img {
+  width: 160px;
+  height: 224px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.9);
+}
+.reveal-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #e0e0e0;
+  background: rgba(0,0,0,0.7);
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  max-width: 160px;
+  text-align: center;
+}
+.reveal-pop-enter-active { transition: opacity 0.25s, transform 0.25s; }
+.reveal-pop-leave-active { transition: opacity 0.4s, transform 0.4s; }
+.reveal-pop-enter-from  { opacity: 0; transform: scale(0.8); }
+.reveal-pop-leave-to    { opacity: 0; transform: scale(1.05); }
 
 /* ── Error banner ─────────────────────────── */
 .error-banner {

@@ -18,6 +18,8 @@ const localCards  = ref([])
 const dragIndex   = ref(null)
 const overIndex   = ref(null)
 const draggingOut = ref(false)   // true while dragging a card OUT to a board zone
+const selectedIds = ref(new Set())
+const peekCardUrl = ref(null)
 
 watch(
   () => [props.visible, props.cards],
@@ -110,10 +112,58 @@ function onThumbDragEnd() {
   draggingOut.value = false
 }
 
+// ── Flip (broadcast) / Peek (local only) ─────────────────────────────────────
+function flipCard(card) {
+  game.flipCard(card.instanceId, props.zone)
+}
+
+function peekAt(card) {
+  peekCardUrl.value = card.imageUrl
+}
+
 // ── Move via button ──────────────────────────────────────────────────────────
 function moveTo(card, toZone) {
   game.moveCard(card.instanceId, props.zone, toZone, undefined, undefined, undefined, props.targetPlayerId)
   localCards.value = localCards.value.filter(c => c.instanceId !== card.instanceId)
+  const set = new Set(selectedIds.value)
+  set.delete(card.instanceId)
+  selectedIds.value = set
+}
+
+// ── Multi-select ─────────────────────────────────────────────────────────────
+function toggleSelect(instanceId) {
+  const set = new Set(selectedIds.value)
+  if (set.has(instanceId)) set.delete(instanceId)
+  else set.add(instanceId)
+  selectedIds.value = set
+}
+
+function selectAll() {
+  selectedIds.value = new Set(localCards.value.map(c => c.instanceId))
+}
+
+function clearSelection() {
+  selectedIds.value = new Set()
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
+function bulkMoveTo(toZone) {
+  const needsRandom = toZone === 'deck' || toZone === 'lifeStack'
+  let ids = [...selectedIds.value]
+  if (needsRandom) ids = shuffleArray(ids)
+  ids.forEach(id => {
+    const card = localCards.value.find(c => c.instanceId === id)
+    if (card) game.moveCard(card.instanceId, props.zone, toZone, undefined, undefined, undefined, props.targetPlayerId)
+  })
+  localCards.value = localCards.value.filter(c => !selectedIds.value.has(c.instanceId))
+  selectedIds.value = new Set()
 }
 
 const ALL_ZONES = [
@@ -150,7 +200,26 @@ const ZONES = computed(() =>
           <button class="zm-close" @click="$emit('close')">✕</button>
         </div>
 
+        <!-- Bulk action bar -->
+        <div v-if="!readOnly && selectedIds.size > 0" class="zm-bulk-bar">
+          <span class="zm-bulk-count">{{ selectedIds.size }} seleccionadas</span>
+          <button
+            v-for="z in ZONES"
+            :key="z.key"
+            class="zm-bulk-btn"
+            :disabled="z.key === zone"
+            @click="bulkMoveTo(z.key)"
+          >→ {{ z.label }}</button>
+          <button class="zm-bulk-clear" @click="clearSelection">✕</button>
+        </div>
+
         <div class="zm-list">
+          <!-- Select-all row -->
+          <div v-if="!readOnly && localCards.length > 0" class="zm-select-all-row">
+            <input type="checkbox" :checked="selectedIds.size === localCards.length" @change="selectedIds.size === localCards.length ? clearSelection() : selectAll()" />
+            <span class="zm-select-all-label">Seleccionar todo</span>
+          </div>
+
           <div
             v-for="(card, i) in localCards"
             :key="card.instanceId"
@@ -158,6 +227,7 @@ const ZONES = computed(() =>
             :class="{
               dragging:    dragIndex === i,
               'drop-over': overIndex === i && dragIndex !== null && dragIndex !== i,
+              selected:    selectedIds.has(card.instanceId),
             }"
             :draggable="!readOnly"
             @dragstart="onDragStart(i, $event)"
@@ -166,6 +236,15 @@ const ZONES = computed(() =>
             @drop="onDrop(i, $event)"
             @dragend="onDragEnd"
           >
+            <input
+              v-if="!readOnly"
+              type="checkbox"
+              class="zm-check"
+              :checked="selectedIds.has(card.instanceId)"
+              @click.stop
+              @change="toggleSelect(card.instanceId)"
+            />
+
             <!-- Drag-to-board handle (thumbnail) -->
             <div
               class="zm-thumb"
@@ -186,7 +265,20 @@ const ZONES = computed(() =>
 
             <span v-if="!readOnly" class="zm-handle">⠿</span>
 
+            <!-- Peek: local, available even in readOnly (life stack) -->
+            <button
+              v-if="!isOpponent && card.faceDown"
+              class="zm-btn zm-btn-peek"
+              @click="peekAt(card)"
+            ><i class="bi bi-eye" /> Ver</button>
+
             <div v-if="!readOnly" class="zm-actions">
+              <!-- Flip: broadcast, only for own cards -->
+              <button
+                v-if="!isOpponent"
+                class="zm-btn zm-btn-flip"
+                @click="flipCard(card)"
+              >{{ card.faceDown ? 'Revelar' : 'Ocultar' }}</button>
               <button
                 v-for="z in ZONES"
                 :key="z.key"
@@ -199,6 +291,14 @@ const ZONES = computed(() =>
 
           <div v-if="localCards.length === 0" class="zm-empty">Sin cartas</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Local card peek — only visible to this player -->
+    <div v-if="peekCardUrl" class="zm-peek-overlay" @click="peekCardUrl = null">
+      <div class="zm-peek-box" @click.stop>
+        <img :src="peekCardUrl" class="zm-peek-img" alt="" />
+        <button class="zm-peek-close" @click="peekCardUrl = null">✕</button>
       </div>
     </div>
   </Teleport>
@@ -310,4 +410,73 @@ const ZONES = computed(() =>
 .zm-btn:disabled { opacity: 0.3; cursor: default; }
 
 .zm-empty { text-align: center; padding: 2rem; color: rgba(255,255,255,0.2); font-size: 0.8rem; }
+
+.zm-row.selected { background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.35); }
+
+.zm-check {
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #818cf8;
+}
+
+.zm-select-all-row {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.65rem; color: rgba(255,255,255,0.45);
+}
+.zm-select-all-label { cursor: pointer; user-select: none; }
+
+.zm-btn.zm-btn-peek { color: #60a5fa; border-color: rgba(96,165,250,0.25); }
+.zm-btn.zm-btn-peek:hover { background: rgba(96,165,250,0.15); color: #93c5fd; }
+.zm-btn.zm-btn-flip { color: #fbbf24; border-color: rgba(251,191,36,0.25); }
+.zm-btn.zm-btn-flip:hover { background: rgba(251,191,36,0.15); color: #fde68a; }
+
+/* Peek overlay — fixed on top of everything, not teleported to a second location */
+.zm-peek-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+}
+.zm-peek-box {
+  position: relative;
+  border-radius: 8px; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.9);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.zm-peek-img {
+  display: block;
+  width: 280px; height: 390px;
+  object-fit: cover;
+}
+.zm-peek-close {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px; color: #fff; font-size: 0.8rem;
+  width: 24px; height: 24px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.zm-bulk-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(99,102,241,0.1);
+  border-bottom: 1px solid rgba(99,102,241,0.2);
+  flex-shrink: 0;
+}
+.zm-bulk-count { font-size: 0.65rem; color: #a5b4fc; flex-shrink: 0; }
+.zm-bulk-btn {
+  font-size: 0.6rem; padding: 0.18rem 0.45rem;
+  background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4);
+  border-radius: 4px; color: #c7d2fe; cursor: pointer;
+  transition: background 0.1s; white-space: nowrap;
+}
+.zm-bulk-btn:hover:not(:disabled) { background: rgba(99,102,241,0.4); color: #fff; }
+.zm-bulk-btn:disabled { opacity: 0.3; cursor: default; }
+.zm-bulk-clear {
+  margin-left: auto; font-size: 0.65rem; padding: 0.15rem 0.4rem;
+  background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 4px; color: #f87171; cursor: pointer;
+  transition: background 0.1s;
+}
+.zm-bulk-clear:hover { background: rgba(239,68,68,0.3); }
 </style>

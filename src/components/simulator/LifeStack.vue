@@ -74,14 +74,22 @@ function getDropHalf(e) {
   return (e.clientY - rect.top) < rect.height / 2 ? 'top' : 'bottom'
 }
 function onDragOver(e) {
-  if (props.isOpponent) return
   e.preventDefault()
-  dropHalf.value = getDropHalf(e)
+  if (!props.isOpponent) {
+    dropHalf.value = getDropHalf(e)
+  }
 }
 function onDragLeave() { dropHalf.value = null }
 function onDrop(e) {
-  if (props.isOpponent) return
   e.preventDefault()
+  if (props.isOpponent) {
+    const raw = e.dataTransfer.getData('text/plain')
+    if (!raw) return
+    const { instanceId } = JSON.parse(raw)
+    targetingSource.value = instanceId
+    game.targetCard(zoneTargetId.value)
+    return
+  }
   const half = getDropHalf(e)
   dropHalf.value = null
   const raw = e.dataTransfer.getData('text/plain')

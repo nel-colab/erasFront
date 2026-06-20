@@ -35,8 +35,21 @@ function onLeave() {
   hideTimer = setTimeout(() => { hovering.value = false }, 200)
 }
 
-function onDblClick() {
-  if (!props.isOpponent && props.count > 0) game.drawCard()
+let clickTimer = null
+function onDeckClick() {
+  if (props.isOpponent || props.count === 0) return
+  if (clickTimer) {
+    clearTimeout(clickTimer)
+    clickTimer = null
+    game.drawCard()
+    return
+  }
+  clickTimer = setTimeout(() => { clickTimer = null }, 250)
+}
+
+function sendTopToLife() {
+  if (props.count === 0 || props.isOpponent) return
+  game.moveCard(props.deck[0].instanceId, 'deck', 'lifeStack', undefined, undefined, 'top', null, true)
 }
 
 function openPeek() {
@@ -97,7 +110,7 @@ function onDeckDrop(e) {
       :title="isOpponent
         ? `Mazo del oponente (${count})`
         : `Tu mazo (${count}) — doble clic robar · arrastra carta → tope`"
-      @dblclick="onDblClick"
+      @click="onDeckClick"
       @dragover="onDeckDragOver"
       @dragleave="onDeckDragLeave"
       @drop="onDeckDrop"
@@ -149,6 +162,7 @@ function onDeckDrop(e) {
             <button class="dc-btn primary" :disabled="count === 0" @click="openPeekBottom">↓ Ver</button>
           </div>
           <button class="dc-btn" :disabled="count === 0" @click="confirmShuffle">Barajar</button>
+          <button class="dc-btn" :disabled="count === 0" @click="sendTopToLife">Top → Vida</button>
           <button class="dc-btn" @click="confirmIncludeDiscard">+ Descarte</button>
           <button class="dc-btn" @click="confirmIncludeTribute">+ Tributos</button>
         </div>

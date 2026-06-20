@@ -10,13 +10,14 @@ function wsUrl() {
 
 export const useGameStore = defineStore('game', {
   state: () => ({
-    client:             null,
-    roomId:             null,
-    gameState:          null,
-    connected:          false,
-    error:              null,
-    targetedInstanceId: null,
-    targetingSourceId:  null,
+    client:                null,
+    roomId:                null,
+    gameState:             null,
+    connected:             false,
+    error:                 null,
+    targetedInstanceId:    null,
+    targetingSourceId:     null,
+    revealedCards:         [],
   }),
 
   getters: {
@@ -68,6 +69,13 @@ export const useGameStore = defineStore('game', {
             } else {
               this.gameState = update
               this.error = null
+              if (update.event === 'REVEAL_TO_HAND' && update.revealedCardImageUrl) {
+                const entry = { id: Date.now() + Math.random(), imageUrl: update.revealedCardImageUrl, name: update.revealedCardName ?? null }
+                this.revealedCards.push(entry)
+                setTimeout(() => {
+                  this.revealedCards = this.revealedCards.filter(c => c.id !== entry.id)
+                }, 3000)
+              }
               if (update.event === 'TARGET_CARD' && update.targetedInstanceId) {
                 const auth = useAuthStore()
                 const isActor = update.actorId === auth.userId
@@ -129,8 +137,8 @@ export const useGameStore = defineStore('game', {
     setMarker(value)            { this.sendAction('SET_MARKER', { value })              },
     forfeit()                   { this.sendAction('FORFEIT')                           },
 
-    moveCard(instanceId, fromZone, toZone, x, y, toPosition, targetPlayerId = null) {
-      this.sendAction('MOVE_CARD', { instanceId, fromZone, toZone, x, y, toPosition, targetPlayerId })
+    moveCard(instanceId, fromZone, toZone, x, y, toPosition, targetPlayerId = null, faceDown = null) {
+      this.sendAction('MOVE_CARD', { instanceId, fromZone, toZone, x, y, toPosition, targetPlayerId, ...(faceDown != null && { faceDown }) })
     },
     flipCard(instanceId, zone) {
       this.sendAction('FLIP_CARD', { instanceId, zone })
@@ -169,6 +177,9 @@ export const useGameStore = defineStore('game', {
     },
     swapWithMain({ instanceId, attachmentType, parentId, targetPlayerId = null }) {
       this.sendAction('SWAP_WITH_MAIN', { instanceId, attachmentType, parentId, targetPlayerId })
+    },
+    revealToHand(instanceId) {
+      this.sendAction('REVEAL_TO_HAND', { instanceId })
     },
     targetCard(targetInstanceId) {
       const sourceInstanceId = targetingSource.value

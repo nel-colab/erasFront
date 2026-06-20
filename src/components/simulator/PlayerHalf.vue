@@ -26,11 +26,13 @@ const targetPlayerId = computed(() =>
 
     <!-- Life column — spans both rows via grid -->
     <div class="lc">
-      <ResourceCounter :isOpponent="isOpponent" :resourceCount="state.resourceCount ?? 0" />
-      <LifeStack
-        :slots="state.lifeStack"
-        :isOpponent="isOpponent"
-      />
+      <div class="lc-inner">
+        <ResourceCounter :isOpponent="isOpponent" :resourceCount="state.resourceCount ?? 0" />
+        <LifeStack
+          :slots="state.lifeStack"
+          :isOpponent="isOpponent"
+        />
+      </div>
     </div>
 
     <!-- Field — middle column, row 1 (player) / row 2 (opponent) -->
@@ -93,8 +95,17 @@ const targetPlayerId = computed(() =>
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 236px;
+}
+
+/* Inner wrapper constrains content to life-stack width for visual alignment */
+.lc-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 0.25rem;
-  min-width: 130px;
+  width: 108px;
+  height: 100%;
 }
 
 /* Field: middle column */
