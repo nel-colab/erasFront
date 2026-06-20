@@ -4,6 +4,7 @@ import CardToken from './CardToken.vue'
 import CreatureInteractionModal from './CreatureInteractionModal.vue'
 import { useGameStore } from '@/store/game'
 import { draggingCard } from '@/composables/dragState'
+import { targetingSource } from '@/composables/targetingState'
 
 const props = defineProps({
   slots:      { type: Array,   default: () => [] },
@@ -35,10 +36,17 @@ function findNearbyCreature(x, y, excludeId) {
 }
 
 function onDragOver(e) {
-  if (props.isOpponent) return
   e.preventDefault()
+  if (props.isOpponent) {
+    if (draggingCard.value) {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const x = ((e.clientX - rect.left) / rect.width)  * 100
+      const y = 100 - ((e.clientY - rect.top) / rect.height) * 100
+      willInteract.value = findNearbyCreature(x, y, null)
+    }
+    return
+  }
   hovered.value = true
-
   if (draggingCard.value) {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width)  * 100
@@ -53,20 +61,29 @@ function onDragLeave() {
 }
 
 function onDrop(e) {
-  if (props.isOpponent) return
   hovered.value = false
-  willInteract.value = null
   e.preventDefault()
   const raw = e.dataTransfer.getData('text/plain')
-  if (!raw) return
+  if (!raw) { willInteract.value = null; return }
   const { instanceId, fromZone } = JSON.parse(raw)
   const rect = e.currentTarget.getBoundingClientRect()
   const x    = ((e.clientX - rect.left) / rect.width)  * 100
   const y    = ((e.clientY - rect.top)  / rect.height) * 100
 
+  if (props.isOpponent) {
+    const mirroredY = 100 - y
+    const nearby = findNearbyCreature(x, mirroredY, null)
+    willInteract.value = null
+    if (nearby) {
+      targetingSource.value = instanceId
+      game.targetCard(nearby.instanceId)
+    }
+    return
+  }
+
+  willInteract.value = null
   const nearby = findNearbyCreature(x, y, instanceId)
   if (nearby) {
-    // Search the correct source zone to get the full card data (imageUrl, metadata)
     const fieldSlot  = props.slots.find(s => s.instanceId === instanceId)
     const zoneSlots  = game.myState?.[fromZone] ?? []
     const zoneSlot   = zoneSlots.find(s => s.instanceId === instanceId)

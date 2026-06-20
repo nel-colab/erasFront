@@ -76,6 +76,7 @@ function closeMenu() { showMenu.value = false }
 
 function menuReduceStrength()   { game.modifyStrength(props.cardSlot.instanceId, -1, targetPlayerId.value) }
 function menuIncreaseStrength() { game.modifyStrength(props.cardSlot.instanceId,  1, targetPlayerId.value) }
+function menuResetStrength()    { game.modifyStrength(props.cardSlot.instanceId, -(props.cardSlot.strengthModifier || 0), targetPlayerId.value) }
 function menuViewInfo()         { showInfo.value = true; closeMenu() }
 function openDetach(type)       { detachGroupType.value = type; showDetachModal.value = true; closeMenu() }
 function menuHacerObjetivo()    { targetingSource.value = props.cardSlot.instanceId; closeMenu() }
@@ -93,7 +94,7 @@ function onClick() {
   tapTimer = setTimeout(() => {
     tapTimer = null
     game.tapCard(props.cardSlot.instanceId, props.zone, targetPlayerId.value)
-  }, 250)
+  }, 100)
 }
 
 function onDblClick() {
@@ -192,6 +193,7 @@ onUnmounted(() => {
       <template v-if="zone === 'field'">
         <button class="fcm-btn" @click="menuReduceStrength">Reducir fuerza</button>
         <button class="fcm-btn" @click="menuIncreaseStrength">Incrementar fuerza</button>
+        <button v-if="(cardSlot.strengthModifier || 0) !== 0" class="fcm-btn" @click="menuResetStrength">Restaurar fuerza</button>
         <button class="fcm-btn target-btn" @click="menuHacerObjetivo">Hacer objetivo</button>
         <template v-if="materialsCount > 0 || resourcesCount > 0">
           <div class="fcm-divider" />

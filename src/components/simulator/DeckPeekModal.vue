@@ -100,8 +100,13 @@ function onThumbDragStart(card, e) {
 }
 
 // ── Move individual card out of deck ─────────────────────────────────────────
-function moveTo(card, toZone) {
-  game.moveCard(card.instanceId, 'deck', toZone)
+function moveTo(card, toZone, position, faceDown) {
+  game.moveCard(card.instanceId, 'deck', toZone, undefined, undefined, position, null, faceDown ?? null)
+  localCards.value = localCards.value.filter(c => c.instanceId !== card.instanceId)
+}
+
+function revealToHand(card) {
+  game.revealToHand(card.instanceId)
   localCards.value = localCards.value.filter(c => c.instanceId !== card.instanceId)
 }
 
@@ -158,11 +163,16 @@ function returnCards(position, shuffle) {
               <div class="dp-drag-hint">↗</div>
             </div>
             <div class="dp-actions">
-              <button class="dp-btn" @click="moveTo(card, 'hand')">Mano</button>
-              <button class="dp-btn" @click="moveTo(card, 'field')">Campo</button>
+              <!-- Row 1: Mano | Tributo | Descarte | Tope -->
+              <button class="dp-btn dp-btn-primary" @click="revealToHand(card)">Mano</button>
               <button class="dp-btn" @click="moveTo(card, 'tributeZone')">Tributo</button>
               <button class="dp-btn" @click="moveTo(card, 'discardPile')">Descarte</button>
-              <button class="dp-btn" @click="moveTo(card, 'lifeStack')">Vida</button>
+              <button class="dp-btn dp-btn-vida" @click="moveTo(card, 'lifeStack', 'top', true)">↑ Tope</button>
+              <!-- Row 2: Mano🙈 | Tributo🙈 | Descarte🙈 | Fondo -->
+              <button class="dp-btn dp-btn-secret" @click="moveTo(card, 'hand', undefined, true)" title="Sin revelar al oponente"><i class="bi bi-eye-slash" /> Mano</button>
+              <button class="dp-btn dp-btn-fd" @click="moveTo(card, 'tributeZone', undefined, true)" title="Cara abajo"><i class="bi bi-eye-slash" /> Tributo</button>
+              <button class="dp-btn dp-btn-fd" @click="moveTo(card, 'discardPile', undefined, true)" title="Cara abajo"><i class="bi bi-eye-slash" /> Descarte</button>
+              <button class="dp-btn dp-btn-vida" @click="moveTo(card, 'lifeStack', 'bottom', true)">↓ Fondo</button>
             </div>
           </div>
 
@@ -262,15 +272,37 @@ function returnCards(position, shuffle) {
 }
 .dp-thumb:hover .dp-drag-hint { opacity: 1; }
 
-.dp-actions { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-left: auto; }
+.dp-actions {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 0.15rem;
+  margin-left: auto;
+  align-items: center;
+  justify-content: end;
+}
 .dp-btn {
   font-size: 0.55rem; padding: 0.15rem 0.35rem;
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 4px; color: rgba(255,255,255,0.7);
   cursor: pointer; transition: background 0.1s; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 0.2rem;
 }
 .dp-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+.dp-btn.dp-btn-primary {
+  background: rgba(99,102,241,0.25); border-color: rgba(99,102,241,0.5);
+  color: #a5b4fc; font-weight: 700;
+}
+.dp-btn.dp-btn-primary:hover { background: rgba(99,102,241,0.45); color: #fff; }
+.dp-btn.dp-btn-secret {
+  background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.3);
+  color: rgba(165,180,252,0.7);
+}
+.dp-btn.dp-btn-secret:hover { background: rgba(99,102,241,0.25); color: #a5b4fc; }
+.dp-btn.dp-btn-fd   { color: rgba(251,191,36,0.85); border-color: rgba(251,191,36,0.25); padding: 0.15rem 0.3rem; }
+.dp-btn.dp-btn-fd:hover { background: rgba(251,191,36,0.15); color: #fde68a; }
+.dp-btn.dp-btn-vida { color: rgba(52,211,153,0.9); border-color: rgba(52,211,153,0.25); }
+.dp-btn.dp-btn-vida:hover { background: rgba(52,211,153,0.15); color: #6ee7b7; }
 
 .dp-empty { text-align: center; padding: 2rem; color: rgba(255,255,255,0.2); font-size: 0.8rem; }
 
