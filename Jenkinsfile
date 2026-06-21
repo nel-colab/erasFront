@@ -47,6 +47,7 @@ pipeline {
                     docker run -d \\
                         --name ${IMAGE_NAME}-staging \\
                         --restart unless-stopped \\
+                        --network eras-network \\
                         -p 3001:80 \\
                         ${IMAGE_NAME}:${GIT_COMMIT}
                     sudo cp nginx/staging.erastcg.com /etc/nginx/sites-enabled/staging.erastcg.com
@@ -77,6 +78,7 @@ pipeline {
                     docker run -d \\
                         --name ${IMAGE_NAME}-prod \\
                         --restart unless-stopped \\
+                        --network eras-network \\
                         -p 3000:80 \\
                         ${IMAGE_NAME}:${GIT_COMMIT}
                     sudo cp nginx/erastcg.com /etc/nginx/sites-enabled/erastcg.com

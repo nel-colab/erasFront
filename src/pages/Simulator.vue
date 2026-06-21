@@ -14,12 +14,15 @@ const game       = useGameStore()
 
 if (!auth.isAuthenticated) router.replace('/login')
 
-const roomId       = ref(route.params.roomId || null)
-const selectedDeck = ref(null)
-const loading      = ref(false)
-const joining      = ref(false)
-const error        = ref(null)
-const copied       = ref(false)
+const roomId          = ref(route.params.roomId || null)
+const selectedDeck    = ref(null)
+const loading         = ref(false)
+const joining         = ref(false)
+const error           = ref(null)
+const copied          = ref(false)
+const isReconnecting  = ref(false)
+const roomStatus      = ref(null)
+const checkingRoom    = ref(false)
 
 const allDecks = computed(() => {
   const mine = decksStore.myDecks
@@ -28,11 +31,31 @@ const allDecks = computed(() => {
   return [...mine, ...pub.filter(d => !ids.has(d.id))]
 })
 
+const statusLabel = computed(() => {
+  const map = { WAITING: 'Esperando oponente', IN_PROGRESS: 'En curso', SELECTING_STARTER: 'Seleccionando starter', MULLIGAN: 'Mulligan', POST_GAME: 'Post partida', FINISHED: 'Finalizada' }
+  return map[roomStatus.value] ?? roomStatus.value ?? ''
+})
+
 onMounted(async () => {
   await Promise.all([
     decksStore.loadPublic(),
     decksStore.loadMine(auth.userId),
   ])
+
+  if (roomId.value) {
+    checkingRoom.value = true
+    try {
+      const { data } = await axios.get(`/api/simulator/rooms/${roomId.value}`)
+      roomStatus.value = data.status
+      if ((data.playerIds ?? []).includes(auth.userId)) {
+        isReconnecting.value = true
+      }
+    } catch {
+      // Room not found or error — treat as fresh join
+    } finally {
+      checkingRoom.value = false
+    }
+  }
 })
 
 async function createRoom() {
@@ -78,6 +101,22 @@ async function enterGame() {
   }
 }
 
+async function reconnectGame() {
+  joining.value = true
+  error.value   = null
+  try {
+    game.connect(roomId.value)
+    await waitConnected()
+    game.joinRoom(null, auth.username)
+    router.push(`/simulator/${roomId.value}/board`)
+  } catch (e) {
+    error.value = 'No se pudo conectar al servidor'
+    game.disconnect()
+  } finally {
+    joining.value = false
+  }
+}
+
 const roomLink = computed(() =>
   roomId.value ? `${window.location.origin}/simulator/${roomId.value}` : ''
 )
@@ -93,6 +132,24 @@ function copyLink() {
   <div class="sim-lobby">
     <h2 class="sim-title">Simulador</h2>
 
+    <!-- Reconnect panel — shown when user is already in the room -->
+    <div v-if="isReconnecting" class="sim-card reconnect-card">
+      <div class="reconnect-icon"><i class="bi bi-arrow-repeat" /></div>
+      <h3 class="section-title" style="margin:0">Ya estás en esta sala</h3>
+      <p class="sim-hint" style="margin:0">
+        Estado: <strong>{{ statusLabel }}</strong> · Tu mazo y estado de juego se conservan.
+      </p>
+      <button
+        class="btn-filled"
+        :disabled="joining"
+        @click="reconnectGame"
+      >
+        {{ joining ? 'Conectando...' : 'Volver a la partida' }}
+      </button>
+      <div class="reconnect-sep">o entra con un mazo nuevo (solo si la partida aún no empezó)</div>
+    </div>
+
+    <!-- Deck selection — always visible, but entering with deck only makes sense for new joins or WAITING rooms -->
     <div class="sim-card">
       <h3 class="section-title">Elige tu mazo</h3>
       <div v-if="allDecks.length === 0" class="sim-empty">No hay mazos disponibles.</div>
@@ -120,7 +177,7 @@ function copyLink() {
       </button>
     </div>
 
-    <!-- Room ready -->
+    <!-- Room ready — enter with selected deck -->
     <div v-else class="sim-card">
       <h3 class="section-title">Sala <code class="room-code">{{ roomId }}</code></h3>
       <p class="sim-hint">Comparte este enlace con tu oponente y luego entra al juego:</p>
@@ -136,7 +193,7 @@ function copyLink() {
         :disabled="joining || !selectedDeck"
         @click="enterGame"
       >
-        {{ joining ? 'Conectando...' : 'Entrar al juego' }}
+        {{ joining ? 'Conectando...' : (isReconnecting ? 'Entrar con nuevo mazo' : 'Entrar al juego') }}
       </button>
     </div>
   </div>
@@ -163,6 +220,27 @@ function copyLink() {
 .sim-error { color: var(--error-color); font-size: 0.8rem; }
 .sim-hint  { font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.6rem; }
 .sim-actions { display: flex; gap: 0.75rem; }
+
+/* Reconnect card */
+.reconnect-card {
+  border-color: rgba(99,102,241,0.4);
+  background: rgba(99,102,241,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.reconnect-icon {
+  font-size: 1.6rem;
+  color: #a5b4fc;
+}
+.reconnect-sep {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--card-border);
+  width: 100%;
+}
 
 .deck-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 .deck-opt {

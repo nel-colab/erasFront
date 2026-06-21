@@ -18,6 +18,8 @@ export const useGameStore = defineStore('game', {
     targetedInstanceId:    null,
     targetingSourceId:     null,
     revealedCards:         [],
+    deckWarning:           null,
+    originalDeck:          [],
   }),
 
   getters: {
@@ -69,6 +71,38 @@ export const useGameStore = defineStore('game', {
             } else {
               this.gameState = update
               this.error = null
+              if (['JOIN_ROOM', 'RECONNECT'].includes(update.event)) {
+                const auth = useAuthStore()
+                const myDeck         = update.players?.[auth.userId]?.deck         ?? []
+                const myOriginalDeck = update.players?.[auth.userId]?.originalDeck ?? []
+                if (myOriginalDeck.length > 0) {
+                  this.originalDeck = [...myOriginalDeck]
+                }
+                if (update.event === 'JOIN_ROOM') {
+                  const missingImage = myOriginalDeck.filter(s => !s.imageUrl)
+                  const missingMeta  = myOriginalDeck.filter(s => s.imageUrl && !s.cardType)
+                  const warnings = []
+                  if (myOriginalDeck.length < 50) warnings.push(`Mazo incompleto: ${myOriginalDeck.length}/50 cartas cargadas`)
+                  if (missingImage.length > 0) warnings.push(`${missingImage.length} carta(s) sin imagen en base de datos`)
+                  if (missingMeta.length > 0) {
+                    const groups = {}
+                    missingMeta.forEach(s => { const k = s.cardName || '?'; groups[k] = (groups[k] || 0) + 1 })
+                    const parts = Object.entries(groups).map(([name, n]) => n > 1 ? `×${n} ${name}` : name)
+                    warnings.push(`Sin metadatos: ${parts.join(', ')}`)
+                  }
+                  if (warnings.length > 0) {
+                    this.deckWarning = warnings.join(' · ')
+                    setTimeout(() => { this.deckWarning = null }, 10000)
+                  }
+                }
+              }
+              if (update.event === 'REFRESH_CARD_METADATA') {
+                const auth = useAuthStore()
+                const updatedOriginal = update.players?.[auth.userId]?.originalDeck ?? []
+                if (updatedOriginal.length > 0) {
+                  this.originalDeck = [...updatedOriginal]
+                }
+              }
               if (update.event === 'REVEAL_TO_HAND' && update.revealedCardImageUrl) {
                 const entry = { id: Date.now() + Math.random(), imageUrl: update.revealedCardImageUrl, name: update.revealedCardName ?? null }
                 this.revealedCards.push(entry)
@@ -108,11 +142,13 @@ export const useGameStore = defineStore('game', {
 
     disconnect() {
       this.client?.deactivate()
-      this.client    = null
-      this.roomId    = null
-      this.gameState = null
-      this.connected = false
-      this.error     = null
+      this.client      = null
+      this.roomId      = null
+      this.gameState   = null
+      this.connected   = false
+      this.error        = null
+      this.deckWarning  = null
+      this.originalDeck = []
     },
 
     sendAction(type, payload = {}) {
@@ -138,7 +174,37 @@ export const useGameStore = defineStore('game', {
     forfeit()                   { this.sendAction('FORFEIT')                           },
 
     moveCard(instanceId, fromZone, toZone, x, y, toPosition, targetPlayerId = null, faceDown = null) {
+      if (!targetPlayerId && this.gameState?.players) {
+        const auth = useAuthStore()
+        const player = this.gameState.players[auth.userId]
+        if (player) {
+          const fromList = this._getZone(player, fromZone)
+          const toList   = this._getZone(player, toZone)
+          if (fromList && toList) {
+            const idx = fromList.findIndex(c => c.instanceId === instanceId)
+            if (idx !== -1) {
+              const [card] = fromList.splice(idx, 1)
+              if (toZone === 'field')       { card.x = x; card.y = y }
+              else                          { card.x = null; card.y = null }
+              if (toZone === 'discardPile') card.faceDown = false
+              if (toZone === 'deck')        card.faceDown = true
+              if (toZone !== 'field')       card.tapped = false
+              if (fromZone === 'field' && toZone !== 'field') {
+                ;(card.materials ?? []).forEach(m => { m.faceDown = false; m.tapped = false; player.discardPile.push(m) })
+                ;(card.resources ?? []).forEach(r => { r.faceDown = false; r.tapped = false; player.discardPile.push(r) })
+                card.materials = []; card.resources = []; card.strengthModifier = 0
+              }
+              toList.push(card)
+            }
+          }
+        }
+      }
       this.sendAction('MOVE_CARD', { instanceId, fromZone, toZone, x, y, toPosition, targetPlayerId, ...(faceDown != null && { faceDown }) })
+    },
+
+    _getZone(player, zoneName) {
+      const map = { hand: 'hand', deck: 'deck', lifeStack: 'lifeStack', tributeZone: 'tributeZone', discardPile: 'discardPile', field: 'field' }
+      return player[map[zoneName]] ?? null
     },
     flipCard(instanceId, zone) {
       this.sendAction('FLIP_CARD', { instanceId, zone })
@@ -186,6 +252,10 @@ export const useGameStore = defineStore('game', {
       targetingSource.value = null
       this.sendAction('TARGET_CARD', { targetInstanceId, sourceInstanceId })
     },
+    refreshCardMetadata(cardId) {
+      this.sendAction('REFRESH_CARD_METADATA', { cardId })
+    },
+
     reclassifyAttachment({ instanceId, fromType, parentId, targetPlayerId = null }) {
       this.sendAction('RECLASSIFY_ATTACHMENT', { instanceId, fromType, parentId, targetPlayerId })
     },

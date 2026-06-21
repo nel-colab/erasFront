@@ -5,6 +5,7 @@ import CreatureInteractionModal from './CreatureInteractionModal.vue'
 import { useGameStore } from '@/store/game'
 import { draggingCard } from '@/composables/dragState'
 import { targetingSource } from '@/composables/targetingState'
+import { effectSummonPending } from '@/composables/effectSummonState'
 
 const props = defineProps({
   slots:      { type: Array,   default: () => [] },
@@ -94,7 +95,15 @@ function onDrop(e) {
     return
   }
 
+  const zoneSlots  = game.myState?.[fromZone] ?? []
+  const droppedCard = zoneSlots.find(c => c.instanceId === instanceId)
+  const isCreatureSummon = game.roomStatus === 'IN_PROGRESS'
+    && fromZone !== 'field'
+    && droppedCard?.cardType === 'creature'
+
   game.moveCard(instanceId, fromZone, 'field', x, y)
+
+  if (isCreatureSummon) effectSummonPending.value = true
 }
 </script>
 
@@ -117,7 +126,11 @@ function onDrop(e) {
       v-for="s in slots"
       :key="s.instanceId"
       class="field-card-wrapper"
-      :style="{ left: (s.x ?? 50) + '%', top: (isOpponent ? (100 - (s.y ?? 50)) : (s.y ?? 50)) + '%' }"
+      :style="{
+        left:   (s.x ?? 50) + '%',
+        top:    (isOpponent ? (100 - (s.y ?? 50)) : (s.y ?? 50)) + '%',
+        zIndex: draggingCard?.instanceId === s.instanceId ? 100 : 1,
+      }"
     >
       <CardToken :cardSlot="s" zone="field" :isOpponent="isOpponent" />
     </div>

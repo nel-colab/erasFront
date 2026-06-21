@@ -209,10 +209,10 @@ function cardLabel(slot) { return slot.cardName || slot.cardId }
                   <button class="swap-btn" title="Intercambiar con carta principal" @click="swap(mat, 'material')">⇅</button>
                 </div>
                 <div class="attach-btns">
-                  <button class="ab reclassify-btn" @click="reclassify(mat, 'material')">→ Rec</button>
-                  <button class="ab" @click="detach(mat, 'material', 'hand')">Mano</button>
                   <button class="ab" @click="detach(mat, 'material', 'tributeZone')">Tributos</button>
                   <button class="ab danger" @click="detach(mat, 'material', 'discardPile')">Descarte</button>
+                  <button class="ab" @click="detach(mat, 'material', 'hand')">Mano</button>
+                  <button class="ab reclassify-btn" @click="reclassify(mat, 'material')">→ Rec</button>
                   <button class="ab" @click="detach(mat, 'material', 'lifeStack', false, 'bottom')">Fondo vida ↑</button>
                   <button class="ab" @click="detach(mat, 'material', 'lifeStack', false, 'top')">Tope vida ↑</button>
                   <button class="ab" @click="detach(mat, 'material', 'lifeStack', true, 'bottom')">Fondo vida ↓</button>

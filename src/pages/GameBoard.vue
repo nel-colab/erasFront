@@ -8,6 +8,7 @@ import SharedCounter      from '@/components/simulator/SharedCounter.vue'
 import StarterSelectModal from '@/components/simulator/StarterSelectModal.vue'
 import MulliganModal      from '@/components/simulator/MulliganModal.vue'
 import TargetingOverlay   from '@/components/simulator/TargetingOverlay.vue'
+import DecklistModal      from '@/components/simulator/DecklistModal.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -15,10 +16,12 @@ const game   = useGameStore()
 const auth   = useAuthStore()
 
 const roomId     = route.params.roomId
-const optsOpen      = ref(false)
-const showEndModal  = ref(false)
-const startGameOpen = ref(false)   // host's "who goes first" picker
+const optsOpen        = ref(false)
+const showEndModal    = ref(false)
+const startGameOpen   = ref(false)
+const showDecklist    = ref(false)
 
+const isLoading          = computed(() => game.connected && !game.myState)
 const isWaiting          = computed(() => game.roomStatus === 'WAITING')
 const isSelectingStarter = computed(() => game.roomStatus === 'SELECTING_STARTER')
 const isMulligan         = computed(() => game.roomStatus === 'MULLIGAN')
@@ -86,6 +89,8 @@ function copyLink() { navigator.clipboard.writeText(roomLink.value) }
 
 // ── Opciones ──────────────────────────────────────────────────────────────────
 function toggleOpts() { optsOpen.value = !optsOpen.value }
+
+function onVerMazo() { optsOpen.value = false; showDecklist.value = true }
 
 function onSalir() {
   optsOpen.value = false
@@ -198,11 +203,29 @@ function goNewGame() {
       </div>
     </Teleport>
 
+    <!-- Loading overlay — waiting for JOIN_ROOM acknowledgment -->
+    <div v-if="isLoading" class="joining-overlay">
+      <div class="joining-spinner" />
+      <span class="joining-text">Cargando partida...</span>
+    </div>
+
     <!-- Error banner -->
     <div v-if="game.error" class="error-banner">{{ game.error }}</div>
 
+    <!-- Deck warning banner (auto-dismisses after 10s) -->
+    <Transition name="warn-slide">
+      <div v-if="game.deckWarning" class="deck-warn-banner">
+        <i class="bi bi-exclamation-triangle-fill" />
+        {{ game.deckWarning }}
+        <button class="warn-dismiss" @click="game.deckWarning = null">✕</button>
+      </div>
+    </Transition>
+
     <!-- Targeting SVG overlay -->
     <TargetingOverlay />
+
+    <!-- Decklist modal -->
+    <DecklistModal v-if="showDecklist" @close="showDecklist = false" />
 
     <!-- Card reveal popup (both players see this for 3s) -->
     <div v-if="game.revealedCards.length" class="reveal-container">
@@ -276,6 +299,10 @@ function goNewGame() {
             @click="onIniciarPartida"
           >
             <i class="bi bi-play-circle" /> Iniciar partida
+          </button>
+          <div class="opts-sep" />
+          <button class="opts-item" @click="onVerMazo">
+            <i class="bi bi-card-list" /> Ver mazo
           </button>
           <div class="opts-sep" />
           <button class="opts-item" @click="onSalir">
@@ -607,6 +634,32 @@ function goNewGame() {
 .reveal-pop-enter-from  { opacity: 0; transform: scale(0.8); }
 .reveal-pop-leave-to    { opacity: 0; transform: scale(1.05); }
 
+/* ── Joining overlay ──────────────────────── */
+.joining-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+.joining-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255,255,255,0.12);
+  border-top-color: #81c784;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.joining-text {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.6);
+  font-weight: 600;
+}
+
 /* ── Error banner ─────────────────────────── */
 .error-banner {
   position: absolute;
@@ -621,4 +674,43 @@ function goNewGame() {
   border-radius: 0 0 8px 8px;
   z-index: 400;
 }
+
+/* ── Deck warning banner ──────────────────── */
+.deck-warn-banner {
+  position: absolute;
+  top: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(234,179,8,0.92);
+  color: #1a1200;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.3rem 2.2rem 0.3rem 0.75rem;
+  border-radius: 0 0 8px 8px;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.warn-dismiss {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: rgba(0,0,0,0.5);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.warn-dismiss:hover { color: #000; }
+
+.warn-slide-enter-active { transition: opacity 0.2s, transform 0.2s; }
+.warn-slide-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.warn-slide-enter-from  { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+.warn-slide-leave-to    { opacity: 0; transform: translateX(-50%) translateY(-8px); }
 </style>
